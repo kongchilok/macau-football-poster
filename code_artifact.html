@@ -1,0 +1,3760 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>澳門學界賽事分組圖自動生成器 (通用版)</title>
+
+  <!-- 載入 Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- 載入 PDF.js 與 JSZip -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <!-- 載入繁體中文粗黑字體 Noto Sans TC 與 Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@500;700;900&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Noto Sans TC"', 'Inter', '"PingFang TC"', '"Microsoft JhengHei"', 'sans-serif'],
+          },
+          colors: {
+            studio: {
+              950: '#070b12',
+              900: '#0d1420',
+              850: '#131c2e',
+              800: '#19253b',
+              700: '#253552',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    body {
+      font-family: "Noto Sans TC", "Inter", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      background-color: #070b12;
+      color: #f1f5f9;
+    }
+
+    .studio-grid-bg {
+      background-color: #0a0f1a;
+      background-image: radial-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0d1420;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: #1e293b;
+      height: 6px;
+      border-radius: 999px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 9999px;
+      background: #38bdf8;
+      cursor: pointer;
+      border: 2px solid #0f172a;
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+      transition: transform 0.12s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+
+    .canvas-draggable {
+      cursor: grab;
+    }
+    .canvas-draggable:active {
+      cursor: grabbing;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col overflow-x-hidden selection:bg-sky-500/30 selection:text-sky-200">
+
+  <!-- ==================== 頂部導覽列 ==================== -->
+  <header class="sticky top-0 z-30 bg-studio-900/95 backdrop-blur-md border-b border-slate-800/90">
+    <!-- 第一列：品牌 + 核心匯出按鈕 -->
+    <div class="max-w-[1720px] mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 via-sky-500 to-blue-600 flex items-center justify-center shadow-lg shadow-sky-500/20 shrink-0">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 class="text-sm sm:text-base font-bold tracking-tight text-white truncate">澳門學界賽事分組圖自動生成器</h1>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-sky-500/15 text-sky-300 border border-sky-500/30">
+              通用版
+            </span>
+            <span id="headerMetaBadge" class="hidden md:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
+              2026/2027學年 · 足球
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-400 hidden sm:block truncate">支援教青局全學界賽程 PDF 自動解析・55+ 校徽智慧配對・一鍵批次匯出全組 PNG</p>
+        </div>
+      </div>
+
+      <!-- 匯出操作群組 -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <button id="btnCopyImg" onclick="copyCanvasToClipboard()" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-semibold border border-slate-700 transition active:scale-95">
+          <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          <span>複製圖片</span>
+        </button>
+
+        <button id="btnDownloadPng" onclick="downloadCurrentPosterPng()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold shadow-md shadow-sky-500/20 transition active:scale-95">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M7 10l5 5 5-5M12 15V3"></path>
+          </svg>
+          <span>下載此組 PNG</span>
+        </button>
+
+        <button id="btnBatchZip" onclick="exportAllDivisionsZip()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold shadow-lg shadow-emerald-500/20 transition active:scale-95">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.3" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+          </svg>
+          <span id="btnBatchZipLabel">一鍵批次匯出全部組別 (ZIP)</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 第二列：動態組別切換標籤列 -->
+    <div class="border-t border-slate-800/80 bg-studio-950/70">
+      <div class="max-w-[1720px] mx-auto px-4 py-2 flex items-center gap-2 overflow-x-auto">
+        <span class="text-[11px] font-semibold text-slate-400 shrink-0 mr-1">賽程組別：</span>
+        <div id="divisionTabsContainer" class="flex items-center gap-1.5">
+          <!-- 動態產生各組別按鈕 -->
+        </div>
+        <button onclick="addNewDivision()" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 shrink-0 transition">
+          <span>＋ 新增組別</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== 主工作區 ==================== -->
+  <main class="flex-1 max-w-[1720px] w-full mx-auto flex flex-col lg:flex-row">
+
+    <!-- 左側四步設定欄 -->
+    <aside class="w-full lg:w-[445px] xl:w-[480px] shrink-0 bg-studio-900 border-b lg:border-b-0 lg:border-r border-slate-800/90 flex flex-col lg:h-[calc(100vh-110px)] lg:sticky lg:top-[110px]">
+
+      <!-- 四步驟分頁導覽 -->
+      <nav class="grid grid-cols-4 gap-1 p-2 bg-studio-950/90 border-b border-slate-800 shrink-0">
+        <button data-tab="pdf" onclick="switchTab('pdf')" class="tab-btn flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl text-xs font-semibold transition-all bg-studio-800 text-sky-400 border border-sky-500/30">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+          </svg>
+          <span>1. 上傳PDF</span>
+        </button>
+
+        <button data-tab="teams" onclick="switchTab('teams')" class="tab-btn flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl text-xs font-semibold transition-all text-slate-400 hover:text-slate-200 hover:bg-studio-800/60 border border-transparent">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h10"></path>
+          </svg>
+          <span>2. 編輯名單</span>
+        </button>
+
+        <button data-tab="logos" onclick="switchTab('logos')" class="tab-btn relative flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl text-xs font-semibold transition-all text-slate-400 hover:text-slate-200 hover:bg-studio-800/60 border border-transparent">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3l7 4v5c0 5-3.5 8.5-7 9-3.5-.5-7-4-7-9V7l7-4z"></path>
+          </svg>
+          <span>3. 校徽圖庫</span>
+          <span id="tabLogoBadge" class="absolute top-1 right-1 px-1.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">0/0</span>
+        </button>
+
+        <button data-tab="style" onclick="switchTab('style')" class="tab-btn flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl text-xs font-semibold transition-all text-slate-400 hover:text-slate-200 hover:bg-studio-800/60 border border-transparent">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="18" height="18" rx="3"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <path d="M21 15l-5-5L5 21"></path>
+          </svg>
+          <span>4. 背景與樣式</span>
+        </button>
+      </nav>
+
+      <!-- 可捲動內容區 -->
+      <div class="flex-1 overflow-y-auto p-4 space-y-4">
+
+        <!-- ==================== 分頁 1：上傳 PDF 與雙引擎解析 ==================== -->
+        <section id="panel-pdf" class="tab-panel space-y-4">
+
+          <!-- PDF 上傳拖曳區 -->
+          <div id="pdfDropzone" class="p-5 rounded-2xl bg-gradient-to-b from-studio-850 to-studio-950 border-2 border-dashed border-sky-500/50 hover:border-sky-400 transition-all text-center space-y-3">
+            <div class="w-12 h-12 mx-auto rounded-2xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400">
+              <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+              </svg>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold text-white">拖曳或選取澳門學界賽程表 PDF</h2>
+              <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+                自動識別<span class="text-sky-300 font-semibold">任何學界項目</span>（足球、籃球、排球、手球、羽毛球、乒乓球等），自動跳過葡文頁並拆分所有組別與線別。
+              </p>
+            </div>
+
+            <div class="flex flex-col gap-2 pt-1">
+              <label class="inline-flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-blue-500 hover:from-sky-400 hover:to-blue-400 text-slate-950 text-xs sm:text-sm font-bold cursor-pointer shadow-lg shadow-sky-500/20 transition active:scale-95">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4"></path>
+                </svg>
+                <span>選取 PDF 檔案自動解析</span>
+                <input id="inputPdfFile" type="file" accept=".pdf,application/pdf" class="hidden" />
+              </label>
+
+              <button onclick="loadFootballSampleData()" class="inline-flex items-center justify-center gap-1.5 w-full px-3 py-2 rounded-xl bg-studio-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition">
+                <span>⚡ 載入測試範例（26/27 學界足球 A/B 組）</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 解析進度條 -->
+          <div id="pdfParseProgress" class="hidden p-3.5 rounded-2xl bg-sky-500/10 border border-sky-500/30 flex items-center gap-3">
+            <div class="w-5 h-5 border-2 border-sky-400 border-t-transparent rounded-full animate-spin shrink-0"></div>
+            <div class="min-w-0">
+              <div id="pdfParseProgressTitle" class="text-xs font-bold text-sky-300">正在解析 PDF 賽程表...</div>
+              <div id="pdfParseProgressDesc" class="text-[11px] text-slate-400 truncate">正在分析表格座標、自動過濾葡文頁與配對校名</div>
+            </div>
+          </div>
+
+          <!-- 解析診斷結果卡片 -->
+          <div id="parseDiagnosticCard" class="p-3.5 rounded-2xl bg-studio-850/90 border border-slate-800 space-y-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-bold text-slate-200">目前賽程解析狀態</span>
+              <span id="parseEngineBadge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-700 text-slate-200">預設範例</span>
+            </div>
+            <div id="parseSummaryText" class="text-xs text-emerald-300 font-semibold leading-relaxed">
+              已載入：2026/2027學年 · 足球 · 2 個組別 · 33 隊
+            </div>
+            <div id="parseDetailsList" class="text-[11px] text-slate-400 space-y-1"></div>
+          </div>
+
+          <!-- 賽事全域資訊微調（學年與運動項目） -->
+          <div class="p-3.5 rounded-2xl bg-studio-850/60 border border-slate-800 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-300">賽事全域資訊（自動從 PDF 擷取）</span>
+              <button onclick="applyMetaToAllDivisionTitles()" class="text-[11px] font-semibold text-sky-400 hover:underline">同步更新全部標題</button>
+            </div>
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">學年</label>
+                <input id="inputGlobalYear" type="text" class="w-full px-3 py-2 rounded-xl bg-studio-950 border border-slate-700 text-xs text-white focus:border-sky-400 outline-none" />
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">運動項目</label>
+                <input id="inputGlobalSport" type="text" placeholder="如：足球、籃球、排球" class="w-full px-3 py-2 rounded-xl bg-studio-950 border border-slate-700 text-xs text-white focus:border-sky-400 outline-none" />
+              </div>
+            </div>
+          </div>
+
+          <!-- 引擎 B：可折疊 Gemini AI 精準解析模式 -->
+          <div class="rounded-2xl bg-studio-950/90 border border-slate-800 overflow-hidden">
+            <button onclick="toggleGeminiAccordion()" class="w-full px-3.5 py-3 flex items-center justify-between text-left hover:bg-studio-850/60 transition">
+              <div class="flex items-center gap-2">
+                <span class="text-sm">✨</span>
+                <div>
+                  <div class="text-xs font-bold text-slate-200">Gemini AI 精準解析（掃描版 / 複雜版面專用）</div>
+                  <div class="text-[11px] text-slate-400">一般教青局 PDF 免設定即可直接解析；掃描圖檔可開啟此模式</div>
+                </div>
+              </div>
+              <svg id="geminiChevron" class="w-4 h-4 text-slate-400 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+
+            <div id="geminiAccordionBody" class="hidden px-3.5 pb-3.5 pt-1 border-t border-slate-800/80 space-y-3">
+              <div class="flex items-center justify-between pt-1">
+                <label for="toggleGeminiMode" class="text-xs font-semibold text-slate-200 cursor-pointer">上傳 PDF 時優先使用 Gemini 2.5 Flash 解析</label>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input id="toggleGeminiMode" type="checkbox" class="sr-only peer" />
+                  <div class="w-10 h-5 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-500"></div>
+                </label>
+              </div>
+
+              <div class="space-y-1.5">
+                <label class="block text-[11px] text-slate-400">Gemini API Key（僅存於本機瀏覽器 localStorage，不經第三方伺服器）</label>
+                <div class="flex gap-2">
+                  <input id="inputGeminiKey" type="password" placeholder="貼上 AIzaSy... 金鑰" class="flex-1 px-3 py-2 rounded-xl bg-studio-900 border border-slate-700 text-xs text-white focus:border-violet-400 outline-none font-mono" />
+                  <button onclick="toggleGeminiKeyVisibility()" class="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 border border-slate-700">顯示</button>
+                </div>
+              </div>
+              <p class="text-[11px] text-slate-500 leading-relaxed">
+                若未開啟或未填寫金鑰，系統會自動使用「內建瀏覽器座標解析引擎（免費用、免聯網金鑰）」進行 100% 本地解析。
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== 分頁 2：編輯當前組別名單 ==================== -->
+        <section id="panel-teams" class="tab-panel hidden space-y-4">
+          <div class="flex items-center justify-between gap-2 p-3 rounded-2xl bg-studio-850 border border-slate-800">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-xs font-bold text-sky-400 shrink-0">目前編輯：</span>
+              <input id="inputDivName" type="text" class="w-32 px-2.5 py-1 rounded-lg bg-studio-950 border border-slate-700 text-xs font-bold text-white focus:border-sky-400 outline-none" />
+            </div>
+            <button id="btnDeleteDivision" onclick="deleteCurrentDivision()" class="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 transition">
+              刪除此組
+            </button>
+          </div>
+
+          <!-- 海報主標題 -->
+          <div class="space-y-1.5">
+            <label for="inputTitle" class="block text-xs font-semibold text-slate-300">此組海報主標題</label>
+            <input id="inputTitle" type="text" class="w-full px-3.5 py-2.5 rounded-xl bg-studio-950 border border-slate-700/80 text-sm text-white focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20 outline-none transition" />
+          </div>
+
+          <!-- 比賽地點 -->
+          <div class="p-3.5 rounded-2xl bg-studio-850/70 border border-slate-800 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <label for="toggleVenue" class="text-xs font-semibold text-slate-200 cursor-pointer">於標題下方顯示比賽地點</label>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input id="toggleVenue" type="checkbox" class="sr-only peer" />
+                <div class="w-10 h-5 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>
+              </label>
+            </div>
+            <input id="inputVenue" type="text" placeholder="例如：比賽地點：蓮峰體育中心足球場" class="w-full px-3 py-2 rounded-xl bg-studio-950 border border-slate-700/80 text-xs text-slate-200 focus:border-sky-400 outline-none transition" />
+          </div>
+
+          <!-- 分組名單文字編輯器 -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label for="inputGroupsText" class="text-xs font-semibold text-slate-300">分組與學校名單（即時同步至畫布）</label>
+              <span id="teamCountStat" class="text-[11px] font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">0 線・0 隊</span>
+            </div>
+            <textarea id="inputGroupsText" rows="15" spellcheck="false" class="w-full p-3.5 rounded-2xl bg-studio-950 border border-slate-700/80 text-sm text-slate-100 leading-relaxed font-mono focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20 outline-none transition resize-y"></textarea>
+            <p class="text-[11px] text-slate-400 leading-relaxed">
+              格式說明：用 <code class="px-1 py-0.5 rounded bg-slate-800 text-amber-300">[A線]</code> 代表組別標題，下方每行填寫一間學校。若 PDF 偶爾有個別校名偏差，可直接在此手動微調。
+            </p>
+          </div>
+        </section>
+
+        <!-- ==================== 分頁 3：雙來源校徽圖庫 ==================== -->
+        <section id="panel-logos" class="tab-panel hidden space-y-4">
+
+          <!-- GitHub Repo ./logos/manifest.json 自動載入狀態 -->
+          <div id="repoLogoStatusBox" class="p-3 rounded-2xl bg-studio-850/90 border border-slate-800 space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <span id="repoLogoDot" class="w-2 h-2 rounded-full bg-slate-500 shrink-0"></span>
+                <span id="repoLogoStatusText" class="text-xs font-semibold text-slate-300 truncate">正在檢查雲端 Repo 校徽庫 (./logos/manifest.json)...</span>
+              </div>
+              <button onclick="toggleManifestHelper()" class="text-[11px] font-semibold text-sky-400 hover:underline shrink-0">部署指南</button>
+            </div>
+
+            <!-- 折疊式 GitHub logos/manifest.json 建置小幫手 -->
+            <div id="manifestHelperBox" class="hidden pt-2 border-t border-slate-800 space-y-2 text-[11px] text-slate-400 leading-relaxed">
+              <p>將 <code class="px-1 py-0.5 rounded bg-slate-800 text-sky-300">校徽補</code> 內所有圖片放進 GitHub Repo 的 <code class="px-1 py-0.5 rounded bg-slate-800 text-emerald-300">logos/</code> 資料夾，並在該資料夾放置一個 <code class="px-1 py-0.5 rounded bg-slate-800 text-amber-300">manifest.json</code> 列出檔名，同事以後打開網頁就會 <b>100% 自動帶出校徽</b>：</p>
+              <pre class="p-2.5 rounded-xl bg-studio-950 border border-slate-800 text-[10px] text-slate-300 overflow-x-auto">["嶺南中學.png", "粵華中學.png", "澳大附校.png"]</pre>
+              <div class="space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-300 font-semibold">Windows PowerShell 一行指令自動生成 manifest.json：</span>
+                  <button onclick="copyPowerShellManifestCmd()" class="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 hover:bg-sky-500/30 font-semibold">複製指令</button>
+                </div>
+                <code id="psManifestCmd" class="block p-2 rounded-lg bg-studio-950 border border-slate-800 text-[10px] text-emerald-300 break-all">Get-ChildItem -File | Where-Object { $_.Extension -match 'png|jpg|jpeg|webp|svg' } | Select-Object -ExpandProperty Name | ConvertTo-Json | Out-File -FilePath manifest.json -Encoding utf8</code>
+              </div>
+            </div>
+          </div>
+
+          <!-- 本機資料夾一鍵載入區 -->
+          <div id="logoDropzone" class="p-4 rounded-2xl bg-gradient-to-b from-studio-850 to-studio-950 border-2 border-dashed border-sky-500/40 hover:border-sky-400 transition-all text-center space-y-3">
+            <div>
+              <h3 class="text-sm font-bold text-white">載入本機校徽資料夾（如 校徽補）</h3>
+              <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+                內建 55+ 間澳門中小學簡稱智慧配對引擎，自動辨識全名、簡稱與英文縮寫。
+              </p>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-2">
+              <label class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold cursor-pointer shadow-lg shadow-sky-500/20 transition active:scale-95">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"></path>
+                </svg>
+                <span>選取整個校徽資料夾</span>
+                <input id="inputLogoFolder" type="file" webkitdirectory directory multiple accept="image/*" class="hidden" />
+              </label>
+
+              <label class="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 cursor-pointer transition active:scale-95">
+                <span>多選圖片</span>
+                <input id="inputLogoFiles" type="file" multiple accept="image/*" class="hidden" />
+              </label>
+            </div>
+          </div>
+
+          <!-- 配對進度與底襯風格 -->
+          <div class="flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl bg-studio-850 border border-slate-800">
+            <div>
+              <div id="logoMatchSummary" class="text-xs font-bold text-amber-300">目前此組已配對 0 / 0 校徽</div>
+              <div id="logoLibraryCount" class="text-[11px] text-slate-400">圖庫共載入 0 張圖片（適用全部組別）</div>
+            </div>
+            <button id="btnClearLogos" onclick="clearLocalLogoLibrary()" class="hidden px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 border border-rose-500/30 transition">
+              清空圖庫
+            </button>
+          </div>
+
+          <!-- 4 種校徽底襯風格 -->
+          <div class="space-y-1.5">
+            <label class="text-xs font-semibold text-slate-300">校徽底襯顯示風格</label>
+            <div class="grid grid-cols-4 gap-1.5">
+              <button data-logo-style="glow" onclick="setLogoStyle('glow')" class="logo-style-btn px-1.5 py-2 rounded-xl text-[11px] font-semibold border transition text-center bg-sky-500/20 border-sky-400 text-sky-300">
+                柔和白光暈
+              </button>
+              <button data-logo-style="badge" onclick="setLogoStyle('badge')" class="logo-style-btn px-1.5 py-2 rounded-xl text-[11px] font-semibold border transition text-center bg-studio-950 border-slate-700 text-slate-300">
+                圓形白底
+              </button>
+              <button data-logo-style="rounded" onclick="setLogoStyle('rounded')" class="logo-style-btn px-1.5 py-2 rounded-xl text-[11px] font-semibold border transition text-center bg-studio-950 border-slate-700 text-slate-300">
+                圓角白框
+              </button>
+              <button data-logo-style="transparent" onclick="setLogoStyle('transparent')" class="logo-style-btn px-1.5 py-2 rounded-xl text-[11px] font-semibold border transition text-center bg-studio-950 border-slate-700 text-slate-300">
+                原圖無底
+              </button>
+            </div>
+          </div>
+
+          <!-- 各校配對與手動覆寫清單 -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <h4 class="text-xs font-semibold text-slate-300">本組各校配對明細</h4>
+              <span class="text-[11px] text-slate-400">可手動改配或單獨上傳</span>
+            </div>
+            <div id="schoolMatchList" class="space-y-2"></div>
+          </div>
+        </section>
+
+        <!-- ==================== 分頁 4：背景、標語與排版 ==================== -->
+        <section id="panel-style" class="tab-panel hidden space-y-5">
+
+          <!-- 畫布比例與欄數 -->
+          <div class="space-y-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-sky-400">畫布尺寸與排列欄數</h3>
+            <div class="grid grid-cols-3 gap-2">
+              <button data-aspect="1:1" onclick="setAspectRatio('1:1')" class="aspect-btn p-2 rounded-xl border text-center transition bg-sky-500/20 border-sky-400 text-sky-200">
+                <div class="text-xs font-bold">1:1 方形</div>
+                <div class="text-[10px] opacity-80">1080×1080</div>
+              </button>
+              <button data-aspect="4:5" onclick="setAspectRatio('4:5')" class="aspect-btn p-2 rounded-xl border text-center transition bg-studio-950 border-slate-700 text-slate-300">
+                <div class="text-xs font-bold">4:5 豎版</div>
+                <div class="text-[10px] opacity-80">1080×1350</div>
+              </button>
+              <button data-aspect="16:9" onclick="setAspectRatio('16:9')" class="aspect-btn p-2 rounded-xl border text-center transition bg-studio-950 border-slate-700 text-slate-300">
+                <div class="text-xs font-bold">16:9 橫版</div>
+                <div class="text-[10px] opacity-80">1920×1080</div>
+              </button>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2">
+              <button data-cols="auto" onclick="setColumnMode('auto')" class="col-btn py-1.5 rounded-xl text-xs font-semibold border transition bg-sky-500/20 border-sky-400 text-sky-200">
+                欄數：自動
+              </button>
+              <button data-cols="2" onclick="setColumnMode('2')" class="col-btn py-1.5 rounded-xl text-xs font-semibold border transition bg-studio-950 border-slate-700 text-slate-300">
+                固定 2 欄
+              </button>
+              <button data-cols="3" onclick="setColumnMode('3')" class="col-btn py-1.5 rounded-xl text-xs font-semibold border transition bg-studio-950 border-slate-700 text-slate-300">
+                固定 3 欄
+              </button>
+            </div>
+          </div>
+
+          <!-- 賽場背景照片 -->
+          <div class="space-y-3 pt-3 border-t border-slate-800">
+            <div class="flex items-center justify-between">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-sky-400">賽場背景照片</h3>
+              <button id="btnClearBg" onclick="clearCurrentBackground()" class="hidden text-[11px] font-semibold text-rose-400 hover:text-rose-300">
+                移除背景照片
+              </button>
+            </div>
+
+            <!-- 背景套用範圍選擇 -->
+            <div class="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-studio-950 border border-slate-800">
+              <button id="btnBgScopeAll" onclick="setBgUploadScope('all')" class="py-1.5 rounded-lg text-[11px] font-semibold transition bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                套用至全部組別
+              </button>
+              <button id="btnBgScopeCurrent" onclick="setBgUploadScope('current')" class="py-1.5 rounded-lg text-[11px] font-semibold transition text-slate-400 hover:text-slate-200 border border-transparent">
+                僅套用目前組別
+              </button>
+            </div>
+
+            <div id="bgDropzone" class="p-3.5 rounded-2xl bg-studio-950 border-2 border-dashed border-slate-700 hover:border-sky-400 transition text-center space-y-2.5">
+              <div class="flex items-center justify-center gap-3">
+                <img id="bgThumbPreview" class="hidden w-14 h-11 object-cover rounded-lg border border-slate-700" alt="背景預覽" />
+                <div class="text-left min-w-0">
+                  <div id="bgFileNameLabel" class="text-xs font-semibold text-slate-200 truncate">目前使用：內建深邃球場夜賽背景</div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">支援拖曳或點擊上傳，上傳後可在右圖拖曳構圖</div>
+                </div>
+              </div>
+              <label class="inline-flex items-center justify-center gap-2 w-full px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-slate-700 cursor-pointer transition">
+                <span>上傳自訂賽場照片 (JPG / PNG)</span>
+                <input id="inputBgFile" type="file" accept="image/*" class="hidden" />
+              </label>
+            </div>
+
+            <!-- 背景壓暗、暗角、縮放、偏移 -->
+            <div class="p-3.5 rounded-2xl bg-studio-850/70 border border-slate-800 space-y-3">
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-slate-300">背景壓暗遮罩</span>
+                  <span id="valBgDarkness" class="font-mono text-sky-400">65%</span>
+                </div>
+                <input id="sliderBgDarkness" type="range" min="0" max="95" value="65" class="w-full" />
+              </div>
+
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-slate-300">底部漸層暗角</span>
+                  <span id="valBgVignette" class="font-mono text-sky-400">65%</span>
+                </div>
+                <input id="sliderBgVignette" type="range" min="0" max="100" value="65" class="w-full" />
+              </div>
+
+              <div class="pt-2 border-t border-slate-800 space-y-2.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-semibold text-slate-400">照片構圖微調</span>
+                  <button onclick="resetBgTransform()" class="text-[11px] text-sky-400 hover:underline">重設位置</button>
+                </div>
+                <div>
+                  <div class="flex justify-between text-xs mb-1">
+                    <span class="text-slate-300">縮放比例</span>
+                    <span id="valBgZoom" class="font-mono text-sky-400">100%</span>
+                  </div>
+                  <input id="sliderBgZoom" type="range" min="100" max="200" value="100" class="w-full" />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <div class="flex justify-between text-xs mb-1">
+                      <span class="text-slate-300">水平 X</span>
+                      <span id="valBgPanX" class="font-mono text-sky-400">0%</span>
+                    </div>
+                    <input id="sliderBgPanX" type="range" min="-50" max="50" value="0" class="w-full" />
+                  </div>
+                  <div>
+                    <div class="flex justify-between text-xs mb-1">
+                      <span class="text-slate-300">垂直 Y</span>
+                      <span id="valBgPanY" class="font-mono text-sky-400">0%</span>
+                    </div>
+                    <input id="sliderBgPanY" type="range" min="-50" max="50" value="0" class="w-full" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 底部 #體報 風格標語 -->
+          <div class="space-y-3 pt-3 border-t border-slate-800">
+            <div class="flex items-center justify-between">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-emerald-400">底部焦點標語（可每組獨立編輯）</h3>
+              <label class="relative inline-flex items-center cursor-pointer gap-2">
+                <span class="text-xs text-slate-300">顯示</span>
+                <input id="toggleBanner" type="checkbox" checked class="sr-only peer" />
+                <div class="w-10 h-5 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[22px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+              </label>
+            </div>
+
+            <div id="bannerControlsBox" class="p-3.5 rounded-2xl bg-studio-850/70 border border-slate-800 space-y-3">
+              <div class="grid grid-cols-[1fr_auto] gap-2 items-end">
+                <div>
+                  <label class="block text-[11px] font-semibold text-slate-400 mb-1">左下標籤（留空隱藏）</label>
+                  <input id="inputTagText" type="text" class="w-full px-3 py-2 rounded-xl bg-studio-950 border border-slate-700 text-sm font-bold text-white outline-none focus:border-sky-400" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold text-slate-400 mb-1">框色</label>
+                  <input id="colorTagStroke" type="color" value="#2563eb" class="w-10 h-9 rounded-lg bg-studio-950 border border-slate-700 cursor-pointer p-0.5" />
+                </div>
+              </div>
+
+              <div class="space-y-1.5 pt-2 border-t border-slate-800/80">
+                <div class="flex items-center justify-between">
+                  <label class="text-[11px] font-semibold text-slate-300">第一行亮綠焦點（前綴 ＋ 大字）</label>
+                  <input id="colorLine1" type="color" value="#84cc16" class="w-7 h-6 rounded bg-studio-950 border border-slate-700 cursor-pointer p-0.5" />
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <input id="inputLine1Prefix" type="text" placeholder="例：學足現" class="px-3 py-2 rounded-xl bg-studio-950 border border-slate-700 text-xs text-white outline-none focus:border-lime-400" />
+                  <input id="inputLine1Highlight" type="text" placeholder="例：新面孔" class="px-3 py-2 rounded-xl bg-studio-950 border border-slate-700 text-xs font-bold text-lime-300 outline-none focus:border-lime-400" />
+                </div>
+              </div>
+
+              <div class="space-y-1.5 pt-2 border-t border-slate-800/80">
+                <div class="flex items-center justify-between">
+                  <label class="text-[11px] font-semibold text-slate-300">第二行對比焦點（白字 ＋ 亮黃大字）</label>
+                  <input id="colorLine2" type="color" value="#facc15" class="w-7 h-6 rounded bg-studio-950 border border-slate-700 cursor-pointer p-0.5" />
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <input id="inputLine2Prefix" type="text" placeholder="例：澳大附校" class="px-3 py-2 rounded-xl bg-studio-950 border border-slate-700 text-xs text-white outline-none focus:border-amber-400" />
+                  <input id="inputLine2Highlight" type="text" placeholder="例：力爭衛冕" class="px-3 py-2 rounded-xl bg-studio-950 border border-slate-700 text-xs font-bold text-amber-300 outline-none focus:border-amber-400" />
+                </div>
+              </div>
+
+              <button onclick="copyBannerToAllDivisions()" class="w-full py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold text-slate-300 border border-slate-700 transition">
+                將目前底部標語套用至全部組別
+              </button>
+            </div>
+          </div>
+
+          <!-- 字體與間距細節微調 -->
+          <div class="p-3.5 rounded-2xl bg-studio-850/70 border border-slate-800 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-200">字體與間距微調</span>
+              <button onclick="resetTypographySettings()" class="text-[11px] font-semibold text-sky-400 hover:underline">重設預設</button>
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-slate-300">主標題大小</span>
+                <span id="valTitleSize" class="font-mono text-sky-400">46px</span>
+              </div>
+              <input id="sliderTitleSize" type="range" min="28" max="74" value="46" class="w-full" />
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-slate-300">校名基準大小（多組時會自動安全縮放）</span>
+                <span id="valTeamSize" class="font-mono text-sky-400">35px</span>
+              </div>
+              <input id="sliderTeamSize" type="range" min="20" max="50" value="35" class="w-full" />
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-slate-300">校徽基準尺寸</span>
+                <span id="valLogoSize" class="font-mono text-sky-400">62px</span>
+              </div>
+              <input id="sliderLogoSize" type="range" min="34" max="90" value="62" class="w-full" />
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-slate-300">隊伍行距密度</span>
+                <span id="valRowSpacing" class="font-mono text-sky-400">1.00x</span>
+              </div>
+              <input id="sliderRowSpacing" type="range" min="75" max="135" value="100" class="w-full" />
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-slate-300">底部標語縮放</span>
+                <span id="valBannerScale" class="font-mono text-sky-400">100%</span>
+              </div>
+              <input id="sliderBannerScale" type="range" min="70" max="130" value="100" class="w-full" />
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </aside>
+
+    <!-- ==================== 右側即時畫布預覽工作台 ==================== -->
+    <section class="flex-1 studio-grid-bg flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 min-h-[540px] relative">
+      <div class="w-full max-w-[820px] flex flex-col items-center gap-3.5">
+
+        <div class="w-full flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 px-1">
+          <div class="flex items-center gap-2">
+            <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span id="previewDivisionCaption" class="font-semibold text-slate-200">目前預覽：男子A組</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="previewLogoStat" class="text-[11px] text-amber-300 bg-studio-900/90 px-2.5 py-1 rounded-lg border border-slate-800">
+              校徽配對：0 / 15
+            </span>
+            <span id="canvasDimBadge" class="font-mono text-[11px] text-slate-300 bg-studio-900/90 px-2.5 py-1 rounded-lg border border-slate-800">
+              1080 × 1080 px
+            </span>
+          </div>
+        </div>
+
+        <!-- 主畫布 -->
+        <div class="relative w-full flex items-center justify-center">
+          <canvas
+            id="posterCanvas"
+            width="1080"
+            height="1080"
+            class="max-w-full max-h-[73vh] w-auto h-auto rounded-2xl shadow-[0_25px_70px_-15px_rgba(0,0,0,0.88)] ring-1 ring-white/15 bg-slate-950 transition-shadow"
+          ></canvas>
+        </div>
+
+        <!-- 底部提示列 -->
+        <div class="w-full flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400 px-1">
+          <span>提示：上傳背景照片後，可直接在畫布上按住拖曳調整背景構圖位置。</span>
+          <span id="previewLayoutStat" class="text-slate-400">自動排版：2 欄</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ==================== 批次匯出 ZIP 進度遮罩 ==================== -->
+  <div id="batchModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-md rounded-2xl bg-studio-900 border border-slate-700 p-6 shadow-2xl space-y-4">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+          <div class="w-5 h-5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-white">正在批次匯出全組高清分組圖</h3>
+          <p id="batchModalStatus" class="text-xs text-slate-400 mt-0.5">準備渲染畫布...</p>
+        </div>
+      </div>
+      <div class="w-full h-2.5 rounded-full bg-studio-950 overflow-hidden border border-slate-800">
+        <div id="batchProgressBar" class="h-full bg-gradient-to-r from-sky-400 to-emerald-400 transition-all duration-200" style="width: 0%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 輕量級通知 Toast 容器 ==================== -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- ==================== 核心腳本 ==================== -->
+  <script>
+    // 初始化 PDF.js Worker
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    /**
+     * =========================================================================
+     * 1. 澳門中小學完整字典 (55+ 間學校、別名與簡稱，支援 PDF 校名正規化與校徽配對)
+     * =========================================================================
+     */
+    const MACAU_SCHOOL_DICTIONARY = {
+      '澳門大學附屬應用學校': ['澳大附校', '澳大附屬', '澳門大學附屬', '澳大附小', '澳大附中', 'um', 'umac', 'auaum'],
+      '勞校中學': ['勞校', '勞工子弟', '勞中', 'louhau', 'lh'],
+      '氹仔坊眾學校': ['氹仔坊眾', '氹坊', 'fongchong', 'tfc'],
+      '聖公會中學(澳門)': ['聖公會', '聖公會中學', '聖公會澳門', '澳門聖公會', 'mac', 'anglican'],
+      '嶺南中學': ['嶺南', 'lingnam', 'ln'],
+      '慈幼中學': ['慈幼', '慈幼書院', 'salesiano', 'isic'],
+      '鏡平學校': ['鏡平', '鏡平中學', 'keangpeng', 'kp'],
+      '鏡平學校(小學部)': ['鏡平小學', '鏡小'],
+      '粵華中學': ['粵華', 'yuetwah', 'yw'],
+      '海星中學': ['海星', 'estreladomar', 'edm'],
+      '聖保祿學校': ['聖保祿', 'saopaulo', 'sp'],
+      '利瑪竇中學': ['利瑪竇', 'mateusricci', 'ricci', 'cmr'],
+      '利瑪竇中學小學部': ['利瑪竇小學', '利小'],
+      '澳門葡文學校': ['葡文學校', '葡文', 'epm', 'portuguesa'],
+      '聯國學校': ['聯國', 'son', 'schoolofthenations'],
+      '中葡職業技術學校': ['中葡職中', '職中', '中葡職業', '中葡職業技術', 'elctp'],
+      '澳門國際學校': ['國際學校', '澳門國際', 'tis'],
+      '澳門浸信中學': ['浸信', '浸信中學', 'chamson', 'mbs'],
+      '培華中學': ['培華', 'puiva', 'pv'],
+      '菜農子弟學校': ['菜農', 'choinong', 'cn'],
+      '雷鳴道主教紀念學校': ['雷鳴道', 'versiglia', 'dlv'],
+      '聖若瑟教區中學第五校': ['聖若瑟五校', '聖五', '聖若瑟第五校', '聖若瑟5校', 'cdsj5'],
+      '聖若瑟教區中學第六校': ['聖若瑟六校', '聖六', '聖若瑟第六校', '聖若瑟6校', 'cdsj6'],
+      '聖若瑟教區中學第二校': ['聖若瑟二校', '聖二', 'cdsj2'],
+      '聖若瑟教區中學第三校': ['聖若瑟三校', '聖三', 'cdsj3'],
+      '聖若瑟教區中學': ['聖若瑟', 'cdsj'],
+      '鄭觀應公立學校': ['鄭觀應', 'zhengguanying', 'eozg'],
+      '濠江中學附屬英才學校': ['濠江英才', '英才學校', '英才', 'houkongpremier'],
+      '濠江中學附屬小學': ['濠江小學', '濠小'],
+      '濠江中學': ['濠江', 'houkong', 'hk'],
+      '高美士中葡中學': ['高美士', 'lgg', 'luisgonzagagomes'],
+      '培正中學': ['培正', 'puiching', 'pc'],
+      '嘉諾撒聖心英文中學': ['聖心英', '聖心英文', 'shcces'],
+      '嘉諾撒聖心中學': ['聖心中', '聖心', '聖心中學', 'shcc'],
+      '聖羅撒女子中學中文部': ['聖羅撒中', '聖羅撒中文', 'srlc'],
+      '聖羅撒英文中學': ['聖羅撒英', '聖羅撒英文', 'srle'],
+      '化地瑪聖母女子學校': ['化地瑪', 'fatima'],
+      '教業中學': ['教業', 'kaoyip', 'ky'],
+      '澳門坊眾學校': ['澳門坊眾', '坊眾', '坊眾學校', 'mbc'],
+      '廣大中學': ['廣大', 'kwongtai', 'kt'],
+      '新華學校': ['新華', 'sunwah', 'sw'],
+      '新華夜中學': ['新華夜中'],
+      '同善堂中學': ['同善堂', 'tongsintong', 'tst'],
+      '澳門三育中學': ['三育', '三育中學', 'maa'],
+      '陳瑞祺永援中學': ['永援', '陳瑞祺', '陳瑞祺永援', 'csq'],
+      '澳門培道中學': ['培道', '培道中學', 'poito', 'pt'],
+      '培道中學小學部': ['培道小學'],
+      '庇道學校': ['庇道', 'bidao', 'esb'],
+      '東南學校': ['東南', 'tongnam', 'tn'],
+      '鮑思高粵華小學': ['鮑思高', '鮑思高粵華', 'db'],
+      '聖瑪大肋納嘉諾撒學校': ['聖瑪大肋納', '瑪大肋納', 'smdc'],
+      '何東中葡小學': ['何東', '何東小學'],
+      '聖家學校': ['聖家', 'holyfamily'],
+      '聖善學校': ['聖善'],
+      '聖德蘭學校': ['聖德蘭'],
+      '澳門福建學校': ['福建學校', '福建'],
+      '創新中學': ['創新', '創新中學'],
+      '澳門中華總商會附設青洲中學': ['青洲中學', '青洲'],
+      '澳門工聯職業技術中學': ['工聯職中', '工聯'],
+      '蓮峰普濟學校': ['蓮峰普濟', '普濟']
+    };
+
+    // 依標準名稱長度降冪排列，確保較長校名（如 濠江中學附屬英才學校）優先於較短校名（濠江中學）
+    const CANONICAL_SCHOOLS_SORTED = Object.keys(MACAU_SCHOOL_DICTIONARY).sort((a, b) => b.length - a.length);
+
+    const ASPECT_RATIOS = {
+      '1:1': { width: 1080, height: 1080, label: '1:1 方形' },
+      '4:5': { width: 1080, height: 1350, label: '4:5 豎版' },
+      '16:9': { width: 1920, height: 1080, label: '16:9 橫版' }
+    };
+
+    const KNOWN_SPORTS = [
+      '足球', '籃球', '排球', '手球', '羽毛球', '乒乓球', '田徑', '游泳',
+      '武術', '柔道', '劍擊', '網球', '壁球', '保齡球', '曲棍球', '壘球', '棒球', '五人足球', '三人籃球'
+    ];
+
+    /**
+     * =========================================================================
+     * 2. 預設測試範例 (2026/2027 學年學界足球 A/B 組)
+     * =========================================================================
+     */
+    function buildSampleFootballProject() {
+      return {
+        year: '2026/2027學年',
+        sport: '足球',
+        sourceFileName: '內建測試範例（足球 26/27）',
+        engineUsed: 'sample',
+        divisions: [
+          createDivisionObject({
+            name: '男子A組',
+            teamCountDeclared: 15,
+            title: '2026/2027學年學界足球男子A組比賽分組表',
+            venue: '比賽地點：蓮峰體育中心足球場',
+            line1Prefix: '學足現',
+            line1Highlight: '新面孔',
+            line2Prefix: '澳大附校',
+            line2Highlight: '力爭衛冕',
+            groups: [
+              { label: 'A線', teams: ['澳門大學附屬應用學校', '勞校中學', '氹仔坊眾學校'] },
+              { label: 'B線', teams: ['聖公會中學(澳門)', '嶺南中學', '慈幼中學', '鏡平學校'] },
+              { label: 'C線', teams: ['粵華中學', '海星中學', '聖保祿學校', '利瑪竇中學'] },
+              { label: 'D線', teams: ['澳門葡文學校', '聯國學校', '中葡職業技術學校', '澳門國際學校'] }
+            ]
+          }),
+          createDivisionObject({
+            name: '男子B組',
+            teamCountDeclared: 18,
+            title: '2026/2027學年學界足球男子B組比賽分組表',
+            venue: '比賽地點：鮑思高粵華小學足球場',
+            line1Prefix: '學足B組',
+            line1Highlight: '十八路勁旅',
+            line2Prefix: '六線激戰',
+            line2Highlight: '爭奪十六強',
+            groups: [
+              { label: 'A線', teams: ['聯國學校', '勞校中學', '澳門浸信中學'] },
+              { label: 'B線', teams: ['聖公會中學(澳門)', '慈幼中學', '培華中學'] },
+              { label: 'C線', teams: ['粵華中學', '菜農子弟學校', '雷鳴道主教紀念學校'] },
+              { label: 'D線', teams: ['利瑪竇中學', '海星中學', '澳門葡文學校'] },
+              { label: 'E線', teams: ['聖若瑟教區中學第五校', '鄭觀應公立學校', '濠江中學'] },
+              { label: 'F線', teams: ['聖保祿學校', '澳門大學附屬應用學校', '高美士中葡中學'] }
+            ]
+          })
+        ]
+      };
+    }
+
+    let divisionSeq = 1;
+    function createDivisionObject(cfg = {}) {
+      const groups = Array.isArray(cfg.groups) ? cfg.groups : [];
+      const groupsText = cfg.groupsText != null ? cfg.groupsText : serializeGroupsToText(groups);
+      const parsedGroups = parseGroupsText(groupsText);
+      const sport = cfg.sport || (state && state.meta ? state.meta.sport : '賽事');
+      const year = cfg.year || (state && state.meta ? state.meta.year : '');
+      const name = cfg.name || `新組別 ${divisionSeq}`;
+
+      const autoTitle = `${year}學界${sport}${name}比賽分組表`.replace(/學界賽事/, '學界');
+      const totalTeams = parsedGroups.reduce((s, g) => s + g.teams.length, 0);
+
+      return {
+        id: cfg.id || `div_${Date.now()}_${divisionSeq++}`,
+        name,
+        teamCountDeclared: cfg.teamCountDeclared || null,
+        title: cfg.title || autoTitle,
+        venue: cfg.venue || '',
+        showVenue: Boolean(cfg.showVenue),
+        groupsText,
+        parsedGroups,
+        showBanner: cfg.showBanner !== undefined ? cfg.showBanner : true,
+        tagText: cfg.tagText !== undefined ? cfg.tagText : '#體報',
+        tagStrokeColor: cfg.tagStrokeColor || '#2563eb',
+        line1Prefix: cfg.line1Prefix !== undefined ? cfg.line1Prefix : `學界${sport}`,
+        line1Highlight: cfg.line1Highlight !== undefined ? cfg.line1Highlight : `${name}開戰`,
+        line1Color: cfg.line1Color || '#84cc16',
+        line2Prefix: cfg.line2Prefix !== undefined ? cfg.line2Prefix : `${parsedGroups.length}線共${totalTeams}隊`,
+        line2Highlight: cfg.line2Highlight !== undefined ? cfg.line2Highlight : '全力爭勝',
+        line2Color: cfg.line2Color || '#facc15',
+        bgOverride: null // 若此組單獨設定背景，存 { img, objectUrl, fileName, darkness, vignette, zoom, panX, panY }
+      };
+    }
+
+    function serializeGroupsToText(groups) {
+      return groups
+        .map(g => `[${g.label || g.name || 'A線'}]\n${(g.teams || []).join('\n')}`)
+        .join('\n\n');
+    }
+
+    /**
+     * =========================================================================
+     * 3. 應用程式集中狀態管理
+     * =========================================================================
+     */
+    const state = {
+      meta: {
+        year: '2026/2027學年',
+        sport: '足球',
+        sourceFileName: '',
+        engineUsed: 'sample'
+      },
+      divisions: [],
+      activeDivisionId: null,
+
+      // 背景套用範圍：'all' | 'current'
+      bgUploadScope: 'all',
+      globalBg: {
+        img: null,
+        objectUrl: null,
+        fileName: '',
+        darkness: 65,
+        vignette: 65,
+        zoom: 100,
+        panX: 0,
+        panY: 0
+      },
+
+      // 全域畫布與排版參數
+      aspect: '1:1',
+      columnMode: 'auto',
+      logoStyle: 'glow', // 'glow' | 'badge' | 'rounded' | 'transparent'
+      titleSize: 46,
+      teamSize: 35,
+      logoSize: 62,
+      rowSpacing: 100,
+      bannerScale: 100,
+
+      // 校徽圖庫（支援 GitHub ./logos/manifest.json + 本機資料夾）
+      logoLibrary: [], // { id, source: 'repo'|'local', fileName, baseName, normalized, url, img }
+      manualOverrides: {},
+
+      // Gemini AI 解析設定
+      geminiEnabled: false,
+      geminiApiKey: ''
+    };
+
+    const dragState = {
+      isDragging: false,
+      startX: 0,
+      startY: 0,
+      initPanX: 0,
+      initPanY: 0
+    };
+
+    const canvas = document.getElementById('posterCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function getActiveDivision() {
+      return state.divisions.find(d => d.id === state.activeDivisionId) || state.divisions[0] || null;
+    }
+
+    function getActiveBgConfig(division) {
+      const div = division || getActiveDivision();
+      if (div && div.bgOverride) return div.bgOverride;
+      return state.globalBg;
+    }
+
+    /**
+     * =========================================================================
+     * 4. 字串正規化、校名修正與校徽智慧配對引擎
+     * =========================================================================
+     */
+    function normalizeText(str) {
+      if (!str) return '';
+      return str
+        .toLowerCase()
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[\s\-_.,()（）\[\]【】「」『』·・/\\]+/g, '')
+        .trim();
+    }
+
+    /**
+     * 將 PDF 擷取出的學校原始字串（可能含多餘空白或小誤差）正規化為標準澳門繁體校名
+     */
+    function normalizeSchoolNameFromPdf(raw) {
+      if (!raw) return '';
+      // 去除 CJK 字元之間的無意義空白，保留英文單字間的空白
+      let cleaned = raw
+        .replace(/^\d{1,2}\s*[\.、．]\s*/, '')
+        .replace(/\s*[\.、．]\s*$/, '')
+        .replace(/([\u4e00-\u9fff()（）])\s+([\u4e00-\u9fff()（）])/g, '$1$2')
+        .replace(/([\u4e00-\u9fff()（）])\s+([\u4e00-\u9fff()（）])/g, '$1$2')
+        .replace(/（/g, '(')
+        .replace(/）/g, ')')
+        .trim();
+
+      const norm = normalizeText(cleaned);
+      if (!norm) return '';
+
+      // 1. 精準比對標準校名
+      for (const canon of CANONICAL_SCHOOLS_SORTED) {
+        if (normalizeText(canon) === norm) return canon;
+      }
+
+      // 2. 精準比對別名表
+      for (const canon of CANONICAL_SCHOOLS_SORTED) {
+        const aliases = MACAU_SCHOOL_DICTIONARY[canon];
+        for (const a of aliases) {
+          if (normalizeText(a) === norm) return canon;
+        }
+      }
+
+      // 3. 若字串包含完整標準校名（且多出雜訊字數極少），回傳標準校名
+      for (const canon of CANONICAL_SCHOOLS_SORTED) {
+        const nc = normalizeText(canon);
+        if (nc.length >= 4 && norm.includes(nc) && norm.length - nc.length <= 3) {
+          return canon;
+        }
+      }
+
+      return cleaned;
+    }
+
+    function isKnownCompleteSchool(raw) {
+      const norm = normalizeText(raw);
+      if (!norm || norm.length < 3) return false;
+      for (const canon of CANONICAL_SCHOOLS_SORTED) {
+        if (normalizeText(canon) === norm) return true;
+      }
+      return /(中學|學校|小學|書院|中文部|英文部|第五校|第六校|第二校|第三校|\(澳門\))$/.test(raw.trim());
+    }
+
+    function parseGroupsText(rawText) {
+      const lines = (rawText || '').split(/\r?\n/);
+      const groups = [];
+      let currentGroup = null;
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) continue;
+
+        const headerMatch = line.match(/^[\[\【](.+?)[\]\】]$/);
+        if (headerMatch) {
+          currentGroup = { label: headerMatch[1].trim(), teams: [] };
+          groups.push(currentGroup);
+        } else {
+          if (!currentGroup) {
+            currentGroup = { label: 'A線', teams: [] };
+            groups.push(currentGroup);
+          }
+          const cleanedTeam = line.replace(/^\d+[\.、．\s]+/, '').trim();
+          if (cleanedTeam) {
+            currentGroup.teams.push(cleanedTeam);
+          }
+        }
+      }
+      return groups;
+    }
+
+    function getUniqueSchoolsInDivision(division) {
+      const div = division || getActiveDivision();
+      if (!div) return [];
+      const seen = new Set();
+      const list = [];
+      for (const grp of div.parsedGroups) {
+        for (const team of grp.teams) {
+          if (!seen.has(team)) {
+            seen.add(team);
+            list.push(team);
+          }
+        }
+      }
+      return list;
+    }
+
+    function getSchoolMatchTokens(schoolName) {
+      const normFull = normalizeText(schoolName);
+      const tokens = new Set([normFull]);
+
+      // 查詢字典別名
+      if (MACAU_SCHOOL_DICTIONARY[schoolName]) {
+        for (const alias of MACAU_SCHOOL_DICTIONARY[schoolName]) {
+          tokens.add(normalizeText(alias));
+        }
+      } else {
+        for (const [key, aliases] of Object.entries(MACAU_SCHOOL_DICTIONARY)) {
+          if (normalizeText(key) === normFull) {
+            for (const alias of aliases) tokens.add(normalizeText(alias));
+          }
+        }
+      }
+
+      // 去除常見前後綴（澳門、中學、學校等）
+      const stripped = normFull
+        .replace(/^澳門/, '')
+        .replace(/(附屬應用學校|附屬英才學校|職業技術學校|教區中學第五校|教區中學第六校|教區中學|公立學校|子弟學校|紀念學校|中葡中學|國際學校|葡文學校|女子學校|女子中學中文部|英文中學|中學小學部|中學|學校|小學)$/g, '');
+      if (stripped.length >= 2) tokens.add(stripped);
+
+      return Array.from(tokens).filter(t => t.length >= 2);
+    }
+
+    function resolveLogoForSchool(schoolName) {
+      const override = state.manualOverrides[schoolName];
+      if (override === '__NONE__') return { type: 'manual_none', item: null };
+      if (override && typeof override === 'object' && override.img) {
+        return { type: 'manual_upload', item: override };
+      }
+      if (typeof override === 'string') {
+        const found = state.logoLibrary.find(item => item.id === override);
+        if (found) return { type: 'manual_pick', item: found };
+      }
+
+      if (state.logoLibrary.length === 0) return { type: 'none', item: null };
+
+      const normFull = normalizeText(schoolName);
+      const tokens = getSchoolMatchTokens(schoolName);
+      let bestItem = null;
+      let bestScore = 0;
+
+      for (const item of state.logoLibrary) {
+        const fn = item.normalized;
+        if (!fn) continue;
+        // 去掉檔名中無意義的「校徽 / logo」字樣
+        const fnClean = fn.replace(/(校徽|logo|crest|emblem|icon)$/g, '') || fn;
+        let score = 0;
+
+        if (fnClean === normFull || fn === normFull) {
+          score = 1000;
+        } else if (tokens.includes(fnClean) || tokens.includes(fn)) {
+          score = 860 + fnClean.length * 5;
+        } else if (fnClean.length >= 2 && normFull.includes(fnClean)) {
+          score = 620 + fnClean.length * 10;
+        } else if (normFull.length >= 2 && fnClean.includes(normFull)) {
+          score = 660 + normFull.length * 10;
+        } else {
+          for (const tk of tokens) {
+            if (tk.length >= 2 && (fnClean.includes(tk) || (fnClean.length >= 2 && tk.includes(fnClean)))) {
+              const cand = 420 + Math.min(tk.length, fnClean.length) * 14;
+              if (cand > score) score = cand;
+            }
+          }
+        }
+
+        // 本機手動上傳的校徽在同分時微幅優先於 Repo 預設圖
+        if (score > 0 && item.source === 'local') score += 5;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestItem = item;
+        }
+      }
+
+      return bestItem && bestScore > 0
+        ? { type: 'auto', item: bestItem }
+        : { type: 'none', item: null };
+    }
+
+    /**
+     * =========================================================================
+     * 5. 引擎 A：PDF.js 澳門教青局賽程表座標表格解析引擎（零 API Key、100% 瀏覽器本地執行）
+     * =========================================================================
+     */
+    async function parsePdfWithCoordinateEngine(file) {
+      if (!window.pdfjsLib) {
+        throw new Error('PDF.js 核心庫尚未載入完成，請檢查網路連線並重試。');
+      }
+
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+      const chinesePages = [];
+      let allChineseRawText = '';
+
+      // 步驟 1：逐頁提取文字與 (x, y, width, height) 座標，自動過濾葡文頁
+      for (let p = 1; p <= pdf.numPages; p++) {
+        const page = await pdf.getPage(p);
+        const viewport = page.getViewport({ scale: 1.0 });
+        const textContent = await page.getTextContent();
+
+        const items = [];
+        let pageRaw = '';
+
+        for (const it of textContent.items) {
+          const str = (it.str || '').trim();
+          if (!str) continue;
+          const tx = it.transform[4];
+          const ty = it.transform[5];
+          const topY = viewport.height - ty;
+          const h = Math.abs(it.height || it.transform[3] || 12);
+          const w = Math.abs(it.width || 0);
+
+          items.push({ str, x: tx, y: topY, w, h, page: p });
+          pageRaw += ' ' + str;
+        }
+
+        // 偵測是否為葡文頁（跳過）
+        const cjkCount = (pageRaw.match(/[\u4e00-\u9fff]/g) || []).length;
+        const latinCount = (pageRaw.match(/[A-Za-zÀ-ÿ]/g) || []).length;
+        const isPortugueseHeader = /CAMPEONATO\s+ESCOLAR|MAPA\s+DE\s+CATEGORIAS|MASCULINOS\s+CATEGORIA|FEMININOS\s+CATEGORIA/i.test(pageRaw);
+
+        if (cjkCount < 15 && (latinCount > 40 || isPortugueseHeader)) {
+          continue; // 略過純葡文頁
+        }
+        if (isPortugueseHeader && cjkCount < 35) {
+          continue;
+        }
+
+        chinesePages.push({
+          pageNum: p,
+          width: viewport.width,
+          height: viewport.height,
+          items,
+          rawText: pageRaw
+        });
+        allChineseRawText += '\n' + pageRaw;
+      }
+
+      if (chinesePages.length === 0) {
+        throw new Error('未在 PDF 中偵測到可讀取的繁體中文文字（此檔可能是掃描圖片版 PDF，建議開啟下方「Gemini AI 精準解析」模式）。');
+      }
+
+      // 步驟 2：動態擷取學年、運動項目與比賽地點
+      const compactAllText = allChineseRawText.replace(/([\u4e00-\u9fff])\s+([\u4e00-\u9fff])/g, '$1$2')
+        .replace(/([\u4e00-\u9fff])\s+([\u4e00-\u9fff])/g, '$1$2');
+
+      let detectedYear = '';
+      const yearMatch = compactAllText.match(/(\d{4})\s*[\/／\-－]\s*(\d{4})\s*學年/);
+      if (yearMatch) {
+        detectedYear = `${yearMatch[1]}/${yearMatch[2]}學年`;
+      } else {
+        const y2 = compactAllText.match(/(\d{4}\s*[\/／\-－]\s*\d{4})/);
+        detectedYear = y2 ? `${y2[1].replace(/\s+/g, '').replace(/[／\-－]/g, '/')}學年` : '';
+      }
+
+      let detectedSport = '';
+      const sportMatch = compactAllText.match(/學界\s*([\u4e00-\u9fff]{1,8}?)\s*(?:比賽|賽程|分組|錦標賽)/);
+      if (sportMatch && sportMatch[1]) {
+        detectedSport = sportMatch[1].replace(/(男子|女子|[A-Z]組)/g, '').trim();
+      }
+      if (!detectedSport) {
+        for (const sp of KNOWN_SPORTS) {
+          if (compactAllText.includes(sp)) {
+            detectedSport = sp;
+            break;
+          }
+        }
+      }
+      if (!detectedSport) detectedSport = '體育';
+
+      // 解析比賽地點（支援「比賽地點：A組-XXX B組-YYY」或單一地點）
+      const venueMap = extractVenuesFromText(compactAllText);
+
+      // 步驟 3：偵測欄位 X 座標邊界並解析每一頁的「組別 / 線別 / 隊伍區塊」
+      let sharedColBounds = null;
+      const allDivisionMarkers = [];
+      const allLineMarkers = [];
+      const allTeamBlocks = [];
+
+      for (let idx = 0; idx < chinesePages.length; idx++) {
+        const pg = chinesePages[idx];
+        const yOffset = idx * 2500; // 跨頁連續 Y 座標系
+        const W = pg.width;
+
+        // 尋找表頭欄位座標
+        const bounds = detectTableColumnBounds(pg.items, W) || sharedColBounds || {
+          headerY: 0,
+          divMaxX: W * 0.16,
+          lineMinX: W * 0.13,
+          lineMaxX: W * 0.25,
+          schoolMinX: W * 0.22,
+          schoolMaxX: W * 0.57
+        };
+        if (bounds.foundHeader) sharedColBounds = { ...bounds, headerY: 0 };
+
+        // 過濾掉表頭上方標題區與底部「比賽地點」頁尾
+        const venueLineItem = pg.items.find(it => /比賽地點|地點[:：]/.test(it.str));
+        const footerCutY = venueLineItem ? venueLineItem.y - 6 : pg.height;
+        const bodyItems = pg.items.filter(it => it.y > bounds.headerY + 4 && it.y < footerCutY);
+
+        // A. 提取最左欄的組別標記（如 男子A組 (15隊)）
+        const divColItems = bodyItems
+          .filter(it => it.x < bounds.divMaxX)
+          .sort((a, b) => a.y - b.y || a.x - b.x);
+        const pageDivs = extractDivisionMarkers(divColItems, yOffset);
+        allDivisionMarkers.push(...pageDivs);
+
+        // B. 提取線別標記（A線、B線... 或 第一組）
+        const lineColItems = bodyItems
+          .filter(it => it.x >= bounds.lineMinX - 18 && it.x <= bounds.lineMaxX + 22)
+          .sort((a, b) => a.y - b.y || a.x - b.x);
+        const pageLines = extractLineMarkers(lineColItems, yOffset);
+        allLineMarkers.push(...pageLines);
+
+        // C. 提取學校欄內的隊伍文字與編號區塊（嚴格排除右方「初賽/單循環/十六強/半準決賽」欄）
+        const schoolColItems = bodyItems
+          .filter(it => it.x >= bounds.schoolMinX - 18 && it.x < bounds.schoolMaxX)
+          .filter(it => !isLineHeaderToken(it.str) && !isDivisionHeaderToken(it.str))
+          .sort((a, b) => a.y - b.y || a.x - b.x);
+
+        const pageBlocks = extractTeamBlocksFromSchoolItems(schoolColItems, yOffset);
+        allTeamBlocks.push(...pageBlocks);
+      }
+
+      if (allTeamBlocks.length === 0) {
+        throw new Error('未能從 PDF 表格中識別出帶編號（1. 2. 3.）的學校名單，建議嘗試「Gemini AI 精準解析」模式或手動編輯名單。');
+      }
+
+      // 步驟 4：將 Team Blocks 配對到 Line Labels（A線、B線...）
+      const pairedGroups = pairBlocksWithLines(allTeamBlocks, allLineMarkers);
+
+      // 步驟 5：將配對好的各線分配到對應組別（結合：隊數總和校驗 + 線別重置偵測 + Y座標距離）
+      const builtDivisions = assignGroupsToDivisions(pairedGroups, allDivisionMarkers, detectedYear, detectedSport, venueMap);
+
+      return {
+        year: detectedYear,
+        sport: detectedSport,
+        sourceFileName: file.name,
+        engineUsed: 'pdfjs',
+        divisions: builtDivisions
+      };
+    }
+
+    function detectTableColumnBounds(items, pageWidth) {
+      // 尋找表頭文字：「組別」「學校」「初賽」「十六強」「複賽」「單循環」
+      const schoolHdr = items.find(it => /^學\s*校$/.test(it.str) || it.str === '參賽學校' || it.str === '隊伍');
+      const divHdr = items.find(it => /^組\s*別$/.test(it.str));
+      const rightHdr = items.find(it => /^(初\s*賽|複\s*賽|賽\s*制|單\s*循\s*環|十六強|半準決賽|準決賽|決\s*賽)/.test(it.str));
+
+      if (!schoolHdr && !rightHdr) return null;
+
+      const headerY = Math.max(
+        schoolHdr ? schoolHdr.y + schoolHdr.h : 0,
+        divHdr ? divHdr.y + divHdr.h : 0,
+        rightHdr ? rightHdr.y + rightHdr.h : 0
+      );
+
+      // 亦檢查實質「單循環」文字的 X 座標作為右側硬截止線，防止學校名誤吞右側賽制欄
+      const formatItems = items.filter(it => it.y > headerY && /單循環|雙循環|淘汰賽|十六強|半準決賽|準決賽|輪空/.test(it.str));
+      const minFormatX = formatItems.length > 0 ? Math.min(...formatItems.map(it => it.x)) : null;
+
+      // 偵測「A線 / B線」的實際 X 座標
+      const lineSamples = items.filter(it => it.y > headerY && isLineHeaderToken(it.str));
+      const lineAvgX = lineSamples.length > 0
+        ? lineSamples.reduce((s, it) => s + it.x, 0) / lineSamples.length
+        : (divHdr ? divHdr.x + pageWidth * 0.11 : pageWidth * 0.17);
+
+      const lineMaxEdge = lineSamples.length > 0
+        ? Math.max(...lineSamples.map(it => it.x + Math.max(it.w, 20)))
+        : lineAvgX + 26;
+
+      // 偵測學校欄編號「1. / 2.」的實際起始 X
+      const numSamples = items.filter(it => it.y > headerY && it.x > lineAvgX + 10 && it.x < pageWidth * 0.55 && /^1\s*[\.、．]/.test(it.str));
+      const schoolStartX = numSamples.length > 0
+        ? Math.min(...numSamples.map(it => it.x))
+        : (schoolHdr ? Math.min(schoolHdr.x, lineMaxEdge + 4) : lineMaxEdge + 6);
+
+      const rightCutCandidates = [];
+      if (rightHdr && rightHdr.x > schoolStartX + 50) rightCutCandidates.push(rightHdr.x - 10);
+      if (minFormatX && minFormatX > schoolStartX + 50) rightCutCandidates.push(minFormatX - 10);
+      const schoolMaxX = rightCutCandidates.length > 0
+        ? Math.min(...rightCutCandidates)
+        : pageWidth * 0.58;
+
+      return {
+        foundHeader: true,
+        headerY,
+        divMaxX: lineAvgX - 6,
+        lineMinX: lineAvgX - 12,
+        lineMaxX: lineMaxEdge + 8,
+        schoolMinX: Math.max(lineMaxEdge - 2, schoolStartX - 12),
+        schoolMaxX
+      };
+    }
+
+    function isLineHeaderToken(str) {
+      const s = (str || '').replace(/\s+/g, '');
+      return /^[A-L]線$/.test(s) || /^第[一二三四五六七八九十\d]+組$/.test(s);
+    }
+
+    function isDivisionHeaderToken(str) {
+      const s = (str || '').replace(/\s+/g, '');
+      return /^(?:男|女|混合|公開)(?:子)?[A-F甲乙丙丁戊]組/.test(s) || /^公開組/.test(s);
+    }
+
+    function extractDivisionMarkers(colItems, yOffset) {
+      if (colItems.length === 0) return [];
+      // 將垂直距離接近（<= 28px）的文字塊合併為單一組別標籤（如「男子A組」+「(15隊)」）
+      const clusters = [];
+      for (const it of colItems) {
+        const last = clusters[clusters.length - 1];
+        if (last && Math.abs(it.y - last.yMax) <= 28) {
+          last.texts.push(it.str);
+          last.yMax = Math.max(last.yMax, it.y);
+        } else {
+          clusters.push({ texts: [it.str], yMin: it.y, yMax: it.y });
+        }
+      }
+
+      const markers = [];
+      for (const cl of clusters) {
+        const merged = cl.texts.join('').replace(/\s+/g, '').replace(/（/g, '(').replace(/）/g, ')');
+        const divMatch = merged.match(/((?:男|女|混合)(?:子)?[A-F甲乙丙丁戊]組|公開組|小學[A-F]?組|中學[A-F]?組|[A-F]組)/);
+        if (divMatch) {
+          const cntMatch = merged.match(/\(?\s*(\d{1,2})\s*隊\)?/);
+          markers.push({
+            name: divMatch[1],
+            declaredCount: cntMatch ? parseInt(cntMatch[1], 10) : null,
+            yCenter: yOffset + (cl.yMin + cl.yMax) / 2
+          });
+        }
+      }
+      return markers;
+    }
+
+    function extractLineMarkers(colItems, yOffset) {
+      // 先把同一水平行（|dy| <= 6）的拆字合併（防止「A」和「線」分成兩個 text item）
+      const rows = clusterItemsIntoVisualRows(colItems, 6);
+      const lines = [];
+      for (const row of rows) {
+        const joined = row.text.replace(/\s+/g, '');
+        const match = joined.match(/^([A-L]線|第[一二三四五六七八九十\d]+組)$/);
+        if (match) {
+          lines.push({
+            label: match[1],
+            yCenter: yOffset + row.y
+          });
+        }
+      }
+      return lines;
+    }
+
+    function clusterItemsIntoVisualRows(items, yTolerance = 6.5) {
+      const sorted = [...items].sort((a, b) => a.y - b.y || a.x - b.x);
+      const rows = [];
+
+      for (const it of sorted) {
+        const last = rows[rows.length - 1];
+        if (last && Math.abs(it.y - last.y) <= yTolerance) {
+          last.items.push(it);
+        } else {
+          rows.push({ y: it.y, items: [it] });
+        }
+      }
+
+      return rows.map(r => {
+        r.items.sort((a, b) => a.x - b.x);
+        let text = '';
+        for (let i = 0; i < r.items.length; i++) {
+          const cur = r.items[i];
+          if (i > 0) {
+            const prev = r.items[i - 1];
+            const gap = cur.x - (prev.x + prev.w);
+            if (gap > 3) text += ' ';
+          }
+          text += cur.str;
+        }
+        return { y: r.y, text: text.trim(), items: r.items };
+      });
+    }
+
+    /**
+     * 從學校欄的文字項目組裝出編號隊伍區塊（處理跨行折行、編號與校名分離、尾隨編號等各種 DSEDJ PDF 詭異排版）
+     */
+    function extractTeamBlocksFromSchoolItems(schoolItems, yOffset) {
+      const visualRows = clusterItemsIntoVisualRows(schoolItems, 6.5);
+      const rawEntries = []; // { num: number|null, text: string, y: number }
+
+      for (let i = 0; i < visualRows.length; i++) {
+        const row = visualRows[i];
+        const txt = row.text.trim();
+        if (!txt) continue;
+        // 排除表頭殘字或非校名雜訊
+        if (/^(學校|單循環|初賽|複賽|決賽|\(\d+隊\))$/.test(txt.replace(/\s+/g, ''))) continue;
+
+        // 情況 1：一行內含多個編號項目（極少數寬行 PDF）
+        const multiSplit = txt.split(/(?=(?:^|\s)\d{1,2}\s*[\.、．](?:\s|[\u4e00-\u9fff]))/).map(s => s.trim()).filter(Boolean);
+        for (const seg of multiSplit) {
+          // 單獨的數字編號（如 "1." 或 "3."）
+          const loneNumMatch = seg.match(/^(\d{1,2})\s*[\.、．]$/);
+          if (loneNumMatch) {
+            const num = parseInt(loneNumMatch[1], 10);
+            // 檢查上一筆是否為無編號的孤立校名（例如教青局 PDF 的「高美士中葡中學」下一行才是「3.」）
+            const prev = rawEntries[rawEntries.length - 1];
+            if (prev && prev.num === null && Math.abs(row.y - prev.y) < 20) {
+              prev.num = num;
+            } else {
+              rawEntries.push({ num, text: '', y: row.y });
+            }
+            continue;
+          }
+
+          // 編號＋校名（如 "1. 澳門大學附屬應用學校"）
+          const leadNumMatch = seg.match(/^(\d{1,2})\s*[\.、．]\s*(.+)$/);
+          if (leadNumMatch) {
+            rawEntries.push({
+              num: parseInt(leadNumMatch[1], 10),
+              text: leadNumMatch[2].trim(),
+              y: row.y
+            });
+            continue;
+          }
+
+          // 無編號文字行：判斷是「接在空編號後」、「長校名換行延續」還是「獨立校名（編號在下一行）」
+          const prev = rawEntries[rawEntries.length - 1];
+          if (prev && prev.text === '' && Math.abs(row.y - prev.y) < 24) {
+            prev.text = seg;
+          } else if (
+            prev &&
+            prev.text !== '' &&
+            Math.abs(row.y - prev.y) < 20 &&
+            !isKnownCompleteSchool(prev.text)
+          ) {
+            // 延續前一行未完的長校名
+            prev.text = (prev.text + seg).trim();
+          } else if (
+            prev &&
+            prev.text !== '' &&
+            Math.abs(row.y - prev.y) < 18 &&
+            isKnownCompleteSchool(prev.text + seg) &&
+            !isKnownCompleteSchool(seg)
+          ) {
+            prev.text = (prev.text + seg).trim();
+          } else {
+            // 獨立無編號行（可能編號跑到後面或緊接其下）
+            rawEntries.push({ num: null, text: seg, y: row.y });
+          }
+        }
+      }
+
+      // 過濾掉沒有校名文字的空編號，並正規化校名
+      const cleanedEntries = rawEntries
+        .filter(e => e.text && /[\u4e00-\u9fffA-Za-z]/.test(e.text))
+        .map(e => ({
+          num: e.num,
+          name: normalizeSchoolNameFromPdf(e.text),
+          y: yOffset + e.y
+        }))
+        .filter(e => e.name.length >= 2);
+
+      // 依編號重置為 1（或 num <= prevNum）切分為各線的 Team Blocks
+      const blocks = [];
+      let currentBlock = null;
+      let prevNum = 0;
+
+      for (const entry of cleanedEntries) {
+        const shouldStartNewBlock =
+          !currentBlock ||
+          (entry.num === 1 && currentBlock.teams.length > 0) ||
+          (entry.num !== null && prevNum > 0 && entry.num <= prevNum);
+
+        if (shouldStartNewBlock) {
+          currentBlock = {
+            yMin: entry.y,
+            yMax: entry.y,
+            teams: [entry.name]
+          };
+          blocks.push(currentBlock);
+        } else {
+          currentBlock.teams.push(entry.name);
+          currentBlock.yMax = Math.max(currentBlock.yMax, entry.y);
+        }
+
+        if (entry.num !== null) {
+          prevNum = entry.num;
+        } else {
+          prevNum += 1;
+        }
+      }
+
+      return blocks.map(b => ({
+        ...b,
+        yCenter: (b.yMin + b.yMax) / 2
+      }));
+    }
+
+    function pairBlocksWithLines(teamBlocks, lineMarkers) {
+      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      // 情況 1：線別數量與隊伍區塊數量一致 -> 直接依序精準 1 對 1 配對
+      if (lineMarkers.length === teamBlocks.length && lineMarkers.length > 0) {
+        return teamBlocks.map((blk, idx) => ({
+          label: lineMarkers[idx].label,
+          teams: blk.teams,
+          yMin: blk.yMin,
+          yMax: blk.yMax,
+          yCenter: blk.yCenter
+        }));
+      }
+
+      // 情況 2：依 Y 距離配對最接近的線別標記
+      const usedLines = new Set();
+      return teamBlocks.map((blk, idx) => {
+        let bestIdx = -1;
+        let bestDist = Infinity;
+        lineMarkers.forEach((lm, li) => {
+          if (usedLines.has(li)) return;
+          const dist = Math.abs(lm.yCenter - blk.yCenter);
+          if (dist < bestDist && dist < 120) {
+            bestDist = dist;
+            bestIdx = li;
+          }
+        });
+
+        if (bestIdx >= 0) {
+          usedLines.add(bestIdx);
+          return {
+            label: lineMarkers[bestIdx].label,
+            teams: blk.teams,
+            yMin: blk.yMin,
+            yMax: blk.yMax,
+            yCenter: blk.yCenter
+          };
+        }
+        return {
+          label: `${letters[idx % letters.length]}線`,
+          teams: blk.teams,
+          yMin: blk.yMin,
+          yMax: blk.yMax,
+          yCenter: blk.yCenter
+        };
+      });
+    }
+
+    function assignGroupsToDivisions(pairedGroups, divisionMarkers, year, sport, venueMap) {
+      if (divisionMarkers.length === 0) {
+        // 若找不到明確組別標題，依 A線 重置自動切分組別
+        const buckets = splitGroupsByLineReset(pairedGroups);
+        return buckets.map((grps, i) => {
+          const fallbackName = buckets.length === 1 ? '公開組' : `第${i + 1}組別`;
+          return createDivisionObject({
+            name: fallbackName,
+            year,
+            sport,
+            venue: matchVenueForDivision(fallbackName, venueMap),
+            groups: grps
+          });
+        });
+      }
+
+      if (divisionMarkers.length === 1) {
+        const d = divisionMarkers[0];
+        return [
+          createDivisionObject({
+            name: d.name,
+            teamCountDeclared: d.declaredCount,
+            year,
+            sport,
+            venue: matchVenueForDivision(d.name, venueMap),
+            groups: pairedGroups
+          })
+        ];
+      }
+
+      // 策略 1（最精準）：若每個組別都有宣告隊數（如 15隊、18隊），且累加隊數恰好吻合！
+      const allHaveCounts = divisionMarkers.every(d => d.declaredCount && d.declaredCount > 0);
+      if (allHaveCounts) {
+        const byCountResult = trySplitGroupsByDeclaredCounts(pairedGroups, divisionMarkers);
+        if (byCountResult) {
+          return divisionMarkers.map((d, i) =>
+            createDivisionObject({
+              name: d.name,
+              teamCountDeclared: d.declaredCount,
+              year,
+              sport,
+              venue: matchVenueForDivision(d.name, venueMap),
+              groups: byCountResult[i]
+            })
+          );
+        }
+      }
+
+      // 策略 2（次精準）：線別重置偵測（當「A線」再次出現且段數剛好等於組別數）
+      const resetBuckets = splitGroupsByLineReset(pairedGroups);
+      if (resetBuckets.length === divisionMarkers.length) {
+        return divisionMarkers.map((d, i) =>
+          createDivisionObject({
+            name: d.name,
+            teamCountDeclared: d.declaredCount,
+            year,
+            sport,
+            venue: matchVenueForDivision(d.name, venueMap),
+            groups: resetBuckets[i]
+          })
+        );
+      }
+
+      // 策略 3（空間距離兜底）：依每個組別的 Y 中心點歸屬最近的組別
+      const buckets = divisionMarkers.map(() => []);
+      for (const grp of pairedGroups) {
+        let bestDiv = 0;
+        let bestDist = Infinity;
+        divisionMarkers.forEach((d, idx) => {
+          const dist = Math.abs(grp.yCenter - d.yCenter);
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestDiv = idx;
+          }
+        });
+        buckets[bestDiv].push(grp);
+      }
+
+      return divisionMarkers
+        .map((d, i) => ({ d, groups: buckets[i] }))
+        .filter(x => x.groups.length > 0)
+        .map(({ d, groups }) =>
+          createDivisionObject({
+            name: d.name,
+            teamCountDeclared: d.declaredCount,
+            year,
+            sport,
+            venue: matchVenueForDivision(d.name, venueMap),
+            groups
+          })
+        );
+    }
+
+    function trySplitGroupsByDeclaredCounts(groups, divMarkers) {
+      const buckets = [];
+      let cursor = 0;
+      for (const div of divMarkers) {
+        let sum = 0;
+        const bucket = [];
+        while (cursor < groups.length && sum < div.declaredCount) {
+          bucket.push(groups[cursor]);
+          sum += groups[cursor].teams.length;
+          cursor++;
+        }
+        if (sum !== div.declaredCount) return null;
+        buckets.push(bucket);
+      }
+      if (cursor !== groups.length) return null;
+      return buckets;
+    }
+
+    function splitGroupsByLineReset(groups) {
+      const buckets = [];
+      let current = [];
+      for (const g of groups) {
+        const isStartLine = /^(A線|第一組|第1組)$/.test(g.label);
+        if (isStartLine && current.length > 0) {
+          buckets.push(current);
+          current = [];
+        }
+        current.push(g);
+      }
+      if (current.length > 0) buckets.push(current);
+      return buckets;
+    }
+
+    function extractVenuesFromText(text) {
+      const map = { default: '' };
+      const idx = text.indexOf('比賽地點');
+      if (idx === -1) return map;
+      const tail = text.slice(idx, idx + 220).replace(/\n/g, ' ');
+      const cleaned = tail.replace(/^比賽地點\s*[:：]?\s*/, '').trim();
+      map.default = cleaned ? `比賽地點：${cleaned}` : '';
+
+      // 嘗試解析如「A組-蓮峰體育中心足球場 B組-鮑思高粵華小學足球場」
+      const regex = /((?:男|女)?(?:子)?[A-F]組)\s*[-－–:：]\s*([^\s]+)/g;
+      let m;
+      while ((m = regex.exec(cleaned)) !== null) {
+        map[m[1]] = `比賽地點：${m[2]}`;
+      }
+      return map;
+    }
+
+    function matchVenueForDivision(divName, venueMap) {
+      if (!venueMap) return '';
+      if (venueMap[divName]) return venueMap[divName];
+      const letterMatch = divName.match(/([A-F]組)/);
+      if (letterMatch && venueMap[letterMatch[1]]) return venueMap[letterMatch[1]];
+      return venueMap.default || '';
+    }
+
+    /**
+     * =========================================================================
+     * 6. 引擎 B：Gemini 2.5 Flash AI 精準解析（掃描版 / 複雜版面專用）
+     * =========================================================================
+     */
+    async function parsePdfWithGeminiAI(file, apiKey) {
+      if (!apiKey || !apiKey.trim()) {
+        throw new Error('請先輸入有效的 Gemini API Key，或關閉 AI 模式使用內建免費解析引擎。');
+      }
+
+      const base64Data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result || '';
+          const base64 = String(result).split(',')[1];
+          if (!base64) reject(new Error('PDF Base64 編碼失敗'));
+          else resolve(base64);
+        };
+        reader.onerror = () => reject(new Error('讀取 PDF 檔案失敗'));
+        reader.readAsDataURL(file);
+      });
+
+      const prompt = `你是一位專精澳門教青局（DSEDJ）學界體育比賽賽程表的資料解析專家。
+請仔細閱讀這份 PDF，忽略所有純葡文頁面，僅提取繁體中文的比賽分組資料，並嚴格回傳純 JSON（不要任何額外解釋）。
+
+JSON 格式規定如下：
+{
+  "year": "例如 2026/2027學年",
+  "sport": "例如 足球、籃球、排球、手球、羽毛球、乒乓球",
+  "divisions": [
+    {
+      "name": "例如 男子A組、女子A組、男子B組",
+      "venue": "若頁面有註明該組比賽地點請填寫，格式為 比賽地點：XXX，否則空字串",
+      "groups": [
+        {
+          "label": "例如 A線、B線、C線",
+          "teams": ["完整繁體中文校名1", "完整繁體中文校名2"]
+        }
+      ]
+    }
+  ]
+}
+
+注意事項：
+1. 請合併所有因表格寬度而換行的校名，去掉前方的數字序號（1. 2. 3.）。
+2. 請絕對不要把右側「單循環」、「十六強」、「半準決賽」等賽制文字混進校名裡。
+3. 所有校名請保持完整正確的繁體中文。`;
+
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey.trim())}`;
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { inlineData: { mimeType: 'application/pdf', data: base64Data } },
+                { text: prompt }
+              ]
+            }
+          ],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.1
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Gemini API 呼叫失敗 (${response.status})：${errText.slice(0, 140)}`);
+      }
+
+      const jsonRes = await response.json();
+      const rawText = jsonRes?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const cleanJsonStr = rawText.replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
+      const parsed = JSON.parse(cleanJsonStr);
+
+      if (!parsed || !Array.isArray(parsed.divisions) || parsed.divisions.length === 0) {
+        throw new Error('Gemini 未能從 PDF 中擷取到任何分組資料。');
+      }
+
+      const year = parsed.year || '';
+      const sport = parsed.sport || '體育';
+
+      const builtDivisions = parsed.divisions.map(d => {
+        const normalizedGroups = (d.groups || []).map(g => ({
+          label: g.label || 'A線',
+          teams: (g.teams || []).map(t => normalizeSchoolNameFromPdf(t)).filter(Boolean)
+        }));
+        return createDivisionObject({
+          name: d.name || '組別',
+          year,
+          sport,
+          venue: d.venue || '',
+          groups: normalizedGroups
+        });
+      });
+
+      return {
+        year,
+        sport,
+        sourceFileName: file.name,
+        engineUsed: 'gemini',
+        divisions: builtDivisions
+      };
+    }
+
+    /**
+     * 統一 PDF 上傳入口
+     */
+    async function handlePdfUpload(file) {
+      if (!file) return;
+      if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+        showToast('請上傳 PDF 格式的澳門學界賽程表檔案。', 'warning');
+        return;
+      }
+
+      const progressEl = document.getElementById('pdfParseProgress');
+      const progressTitle = document.getElementById('pdfParseProgressTitle');
+      const progressDesc = document.getElementById('pdfParseProgressDesc');
+      progressEl.classList.remove('hidden');
+
+      const useGemini = state.geminiEnabled && state.geminiApiKey.trim().length > 10;
+      progressTitle.textContent = useGemini
+        ? `正在以 Gemini AI 精準解析「${file.name}」...`
+        : `正在以內建引擎解析「${file.name}」...`;
+      progressDesc.textContent = useGemini
+        ? '正在傳送 PDF 至 Gemini 2.5 Flash 識別表格與組別...'
+        : '正在分析表格座標、自動略過葡文頁並正規化校名...';
+
+      try {
+        const result = useGemini
+          ? await parsePdfWithGeminiAI(file, state.geminiApiKey)
+          : await parsePdfWithCoordinateEngine(file);
+
+        applyParsedProject(result);
+        const totalTeams = result.divisions.reduce(
+          (sum, d) => sum + d.parsedGroups.reduce((s, g) => s + g.teams.length, 0),
+          0
+        );
+        showToast(
+          `解析完成！識別出 ${result.sport} 共 ${result.divisions.length} 個組別、${totalTeams} 支隊伍。`,
+          'success'
+        );
+      } catch (err) {
+        console.error('PDF 解析錯誤:', err);
+        showToast(err.message || 'PDF 解析失敗，請檢查檔案或改用 Gemini AI 模式。', 'error');
+      } finally {
+        progressEl.classList.add('hidden');
+      }
+    }
+
+    function applyParsedProject(project) {
+      state.meta.year = project.year || '';
+      state.meta.sport = project.sport || '體育';
+      state.meta.sourceFileName = project.sourceFileName || '';
+      state.meta.engineUsed = project.engineUsed || 'pdfjs';
+
+      state.divisions = project.divisions && project.divisions.length > 0
+        ? project.divisions
+        : [createDivisionObject({ name: '男子A組' })];
+      state.activeDivisionId = state.divisions[0].id;
+
+      // 依第一組線數自動最佳化字體尺寸
+      autoTuneTypographyForDivision(state.divisions[0]);
+
+      renderDivisionTabs();
+      updateParseDiagnosticUI();
+      syncAllInputsFromState();
+      refreshSchoolMatchUI();
+      renderCanvas();
+    }
+
+    function loadFootballSampleData() {
+      applyParsedProject(buildSampleFootballProject());
+      showToast('已載入 2026/2027 學年學界足球 A / B 組範例資料', 'info');
+    }
+
+    function autoTuneTypographyForDivision(div) {
+      if (!div) return;
+      const lineCount = div.parsedGroups.length;
+      if (lineCount >= 7) {
+        state.teamSize = 26;
+        state.logoSize = 44;
+      } else if (lineCount >= 5) {
+        state.teamSize = 31;
+        state.logoSize = 52;
+      } else {
+        state.teamSize = 35;
+        state.logoSize = 62;
+      }
+    }
+
+    function updateParseDiagnosticUI() {
+      const totalDivs = state.divisions.length;
+      const totalTeams = state.divisions.reduce(
+        (sum, d) => sum + d.parsedGroups.reduce((s, g) => s + g.teams.length, 0),
+        0
+      );
+
+      const engineLabels = {
+        pdfjs: { text: '內建 PDF.js 座標引擎', cls: 'bg-sky-500/20 text-sky-300 border border-sky-500/40' },
+        gemini: { text: 'Gemini 2.5 AI 引擎', cls: 'bg-violet-500/20 text-violet-300 border border-violet-500/40' },
+        sample: { text: '內建測試範例', cls: 'bg-slate-700 text-slate-200 border border-slate-600' },
+        manual: { text: '手動建立', cls: 'bg-amber-500/20 text-amber-300 border border-amber-500/40' }
+      };
+      const badgeInfo = engineLabels[state.meta.engineUsed] || engineLabels.sample;
+
+      const engineBadge = document.getElementById('parseEngineBadge');
+      engineBadge.textContent = badgeInfo.text;
+      engineBadge.className = `px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeInfo.cls}`;
+
+      const yearStr = state.meta.year || '未指定學年';
+      const sportStr = state.meta.sport || '學界賽事';
+      document.getElementById('parseSummaryText').textContent =
+        `已識別：${yearStr} · ${sportStr} · ${totalDivs} 個組別 · ${totalTeams} 隊`;
+
+      document.getElementById('headerMetaBadge').textContent = `${yearStr} · ${sportStr}`;
+      document.getElementById('btnBatchZipLabel').textContent = `一鍵批次匯出全部 ${totalDivs} 組 (ZIP)`;
+
+      const detailsEl = document.getElementById('parseDetailsList');
+      detailsEl.innerHTML = state.divisions
+        .map(d => {
+          const cnt = d.parsedGroups.reduce((s, g) => s + g.teams.length, 0);
+          const checkNote = d.teamCountDeclared && d.teamCountDeclared === cnt
+            ? `<span class="text-emerald-400">✓ 隊數吻合</span>`
+            : '';
+          return `<div class="flex items-center justify-between py-0.5 border-b border-slate-800/60 last:border-0">
+            <span class="text-slate-300 font-medium">${escapeHtml(d.name)}</span>
+            <span>${d.parsedGroups.length} 線・${cnt} 隊 ${checkNote}</span>
+          </div>`;
+        })
+        .join('');
+    }
+
+    /**
+     * =========================================================================
+     * 7. 雙來源校徽圖庫載入（GitHub ./logos/manifest.json + 本機資料夾）
+     * =========================================================================
+     */
+    async function tryAutoLoadRepoLogos() {
+      const dot = document.getElementById('repoLogoDot');
+      const statusText = document.getElementById('repoLogoStatusText');
+
+      try {
+        const res = await fetch('./logos/manifest.json', { cache: 'no-cache' });
+        if (!res.ok) throw new Error('manifest not found');
+        const data = await res.json();
+        const fileList = Array.isArray(data) ? data : (Array.isArray(data.files) ? data.files : []);
+
+        if (fileList.length === 0) {
+          dot.className = 'w-2 h-2 rounded-full bg-slate-500 shrink-0';
+          statusText.textContent = '雲端 ./logos/manifest.json 為空，請由下方選取本機校徽資料夾';
+          return;
+        }
+
+        let loaded = 0;
+        const tasks = fileList.map(async (fileName) => {
+          const url = `./logos/${encodeURIComponent(fileName)}`;
+          try {
+            const img = await loadImageFromUrl(url);
+            state.logoLibrary.push({
+              id: 'repo_' + Math.random().toString(36).slice(2, 9),
+              source: 'repo',
+              fileName,
+              baseName: fileName.replace(/\.[^/.]+$/, ''),
+              normalized: normalizeText(fileName),
+              url,
+              img
+            });
+            loaded++;
+          } catch (e) {
+            console.warn('略過無法載入的雲端校徽:', fileName);
+          }
+        });
+
+        await Promise.allSettled(tasks);
+        state.logoLibrary.sort((a, b) => a.fileName.localeCompare(b.fileName, 'zh-Hant'));
+
+        if (loaded > 0) {
+          dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shrink-0';
+          statusText.textContent = `已自動載入雲端 Repo 校徽庫 (${loaded} 張)`;
+          refreshSchoolMatchUI();
+          renderCanvas();
+        } else {
+          dot.className = 'w-2 h-2 rounded-full bg-amber-400 shrink-0';
+          statusText.textContent = '尚未設定雲端 Repo 校徽庫（可直接使用本機資料夾載入）';
+        }
+      } catch (_silent) {
+        // 靜默處理，絕不彈錯
+        dot.className = 'w-2 h-2 rounded-full bg-slate-500 shrink-0';
+        statusText.textContent = '尚未偵測到 ./logos/manifest.json（可使用下方本機資料夾載入）';
+      }
+    }
+
+    function loadImageFromUrl(url) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = url;
+      });
+    }
+
+    function loadImageFromFile(file) {
+      return new Promise((resolve, reject) => {
+        const objectUrl = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => resolve({ img, objectUrl });
+        img.onerror = (err) => {
+          URL.revokeObjectURL(objectUrl);
+          reject(err);
+        };
+        img.src = objectUrl;
+      });
+    }
+
+    async function handleLogoFilesUpload(fileList) {
+      const files = Array.from(fileList).filter(f => {
+        if (f.type && f.type.startsWith('image/')) return true;
+        return /\.(png|jpe?g|webp|gif|svg|bmp)$/i.test(f.name);
+      });
+
+      if (files.length === 0) {
+        showToast('未偵測到圖片檔，請選取包含 PNG / JPG 校徽的資料夾。', 'warning');
+        return;
+      }
+
+      let added = 0;
+      const tasks = files.map(async (file) => {
+        try {
+          const { img, objectUrl } = await loadImageFromFile(file);
+          const idx = state.logoLibrary.findIndex(x => x.fileName === file.name && x.source === 'local');
+          const entry = {
+            id: 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+            source: 'local',
+            fileName: file.name,
+            baseName: file.name.replace(/\.[^/.]+$/, ''),
+            normalized: normalizeText(file.name),
+            url: objectUrl,
+            img
+          };
+          if (idx >= 0) {
+            URL.revokeObjectURL(state.logoLibrary[idx].url);
+            state.logoLibrary[idx] = entry;
+          } else {
+            state.logoLibrary.push(entry);
+          }
+          added++;
+        } catch (e) {
+          console.warn('無法載入圖片:', file.name, e);
+        }
+      });
+
+      await Promise.allSettled(tasks);
+      state.logoLibrary.sort((a, b) => a.fileName.localeCompare(b.fileName, 'zh-Hant'));
+
+      refreshSchoolMatchUI();
+      renderCanvas();
+
+      const stats = computeMatchStats();
+      showToast(`已載入 ${added} 張本機校徽！本組已自動配對 ${stats.matched} / ${stats.total} 校。`, 'success');
+    }
+
+    async function handleSingleSchoolLogoOverride(schoolName, file) {
+      if (!file) return;
+      try {
+        const { img, objectUrl } = await loadImageFromFile(file);
+        const prev = state.manualOverrides[schoolName];
+        if (prev && typeof prev === 'object' && prev.url && prev.url.startsWith('blob:')) {
+          URL.revokeObjectURL(prev.url);
+        }
+        state.manualOverrides[schoolName] = {
+          id: 'custom_' + Date.now(),
+          fileName: file.name,
+          url: objectUrl,
+          img
+        };
+        refreshSchoolMatchUI();
+        renderCanvas();
+        showToast(`已為「${schoolName}」指定校徽 (${file.name})`, 'success');
+      } catch (e) {
+        showToast('圖片讀取失敗，請確認格式為 PNG 或 JPG。', 'error');
+      }
+    }
+
+    function clearLocalLogoLibrary() {
+      for (const item of state.logoLibrary) {
+        if (item.source === 'local' && item.url.startsWith('blob:')) {
+          URL.revokeObjectURL(item.url);
+        }
+      }
+      for (const val of Object.values(state.manualOverrides)) {
+        if (val && typeof val === 'object' && val.url && val.url.startsWith('blob:')) {
+          URL.revokeObjectURL(val.url);
+        }
+      }
+      state.logoLibrary = state.logoLibrary.filter(item => item.source === 'repo');
+      state.manualOverrides = {};
+      refreshSchoolMatchUI();
+      renderCanvas();
+      showToast('已清空本機匯入的校徽圖庫', 'info');
+    }
+
+    function computeMatchStats(division) {
+      const schools = getUniqueSchoolsInDivision(division);
+      let matched = 0;
+      for (const s of schools) {
+        if (resolveLogoForSchool(s).item) matched++;
+      }
+      return { matched, total: schools.length };
+    }
+
+    function refreshSchoolMatchUI() {
+      const schools = getUniqueSchoolsInDivision();
+      const stats = computeMatchStats();
+
+      const summaryEl = document.getElementById('logoMatchSummary');
+      const libCountEl = document.getElementById('logoLibraryCount');
+      const tabBadge = document.getElementById('tabLogoBadge');
+      const previewStat = document.getElementById('previewLogoStat');
+      const clearBtn = document.getElementById('btnClearLogos');
+
+      const allMatched = stats.matched === stats.total && stats.total > 0;
+      summaryEl.textContent = `目前此組已配對 ${stats.matched} / ${stats.total} 校徽`;
+      summaryEl.className = allMatched
+        ? 'text-xs font-bold text-emerald-400'
+        : 'text-xs font-bold text-amber-300';
+
+      libCountEl.textContent = `圖庫共載入 ${state.logoLibrary.length} 張圖片（適用全部組別）`;
+
+      tabBadge.textContent = `${stats.matched}/${stats.total}`;
+      tabBadge.className = allMatched
+        ? 'absolute top-1 right-1 px-1.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+        : 'absolute top-1 right-1 px-1.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40';
+
+      previewStat.textContent = `校徽配對：${stats.matched} / ${stats.total}`;
+      previewStat.className = allMatched
+        ? 'text-[11px] text-emerald-300 bg-studio-900/90 px-2.5 py-1 rounded-lg border border-emerald-500/30'
+        : 'text-[11px] text-amber-300 bg-studio-900/90 px-2.5 py-1 rounded-lg border border-slate-800';
+
+      const hasLocal = state.logoLibrary.some(x => x.source === 'local') || Object.keys(state.manualOverrides).length > 0;
+      clearBtn.classList.toggle('hidden', !hasLocal);
+
+      const container = document.getElementById('schoolMatchList');
+      container.innerHTML = '';
+
+      schools.forEach((schoolName) => {
+        const resolved = resolveLogoForSchool(schoolName);
+        const overrideVal = state.manualOverrides[schoolName];
+
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-2.5 p-2 rounded-xl bg-studio-950/90 border border-slate-800 hover:border-slate-700 transition';
+
+        const thumbWrap = document.createElement('div');
+        thumbWrap.className = 'w-9 h-9 rounded-lg bg-slate-800/90 border border-slate-700 flex items-center justify-center shrink-0 overflow-hidden p-1';
+        if (resolved.item) {
+          const img = document.createElement('img');
+          img.src = resolved.item.url;
+          img.alt = schoolName;
+          img.className = 'max-w-full max-h-full object-contain';
+          thumbWrap.appendChild(img);
+        } else {
+          thumbWrap.innerHTML = `<span class="text-xs font-bold text-slate-400">${escapeHtml(schoolName.charAt(0))}</span>`;
+        }
+
+        const infoCol = document.createElement('div');
+        infoCol.className = 'flex-1 min-w-0 space-y-1';
+
+        const dotColor = resolved.item ? 'bg-emerald-400' : 'bg-amber-400';
+        const nameRow = document.createElement('div');
+        nameRow.className = 'flex items-center gap-1.5';
+        nameRow.innerHTML = `
+          <span class="w-1.5 h-1.5 rounded-full ${dotColor} shrink-0"></span>
+          <span class="text-xs font-semibold text-slate-100 truncate" title="${escapeHtml(schoolName)}">${escapeHtml(schoolName)}</span>
+        `;
+
+        const select = document.createElement('select');
+        select.className = 'w-full px-2 py-1 rounded-lg bg-studio-850 border border-slate-700/80 text-[11px] text-slate-300 outline-none focus:border-sky-400';
+
+        const optAuto = document.createElement('option');
+        optAuto.value = '__AUTO__';
+        optAuto.textContent = resolved.type === 'auto'
+          ? `✨ 自動配對：${resolved.item.fileName}`
+          : '✨ 自動配對（尚未找到符合檔名）';
+        select.appendChild(optAuto);
+
+        if (resolved.type === 'manual_upload') {
+          const optCustom = document.createElement('option');
+          optCustom.value = '__CUSTOM__';
+          optCustom.textContent = `📌 單獨上傳：${resolved.item.fileName}`;
+          select.appendChild(optCustom);
+        }
+
+        const optNone = document.createElement('option');
+        optNone.value = '__NONE__';
+        optNone.textContent = '🛡️ 使用預設盾牌圖示';
+        select.appendChild(optNone);
+
+        state.logoLibrary.forEach(libItem => {
+          const opt = document.createElement('option');
+          opt.value = libItem.id;
+          opt.textContent = `${libItem.source === 'repo' ? '☁️' : '📁'} ${libItem.fileName}`;
+          select.appendChild(opt);
+        });
+
+        if (overrideVal === '__NONE__') select.value = '__NONE__';
+        else if (overrideVal && typeof overrideVal === 'object') select.value = '__CUSTOM__';
+        else if (typeof overrideVal === 'string') select.value = overrideVal;
+        else select.value = '__AUTO__';
+
+        select.addEventListener('change', (e) => {
+          const val = e.target.value;
+          if (val === '__AUTO__') delete state.manualOverrides[schoolName];
+          else if (val === '__NONE__') state.manualOverrides[schoolName] = '__NONE__';
+          else if (val !== '__CUSTOM__') state.manualOverrides[schoolName] = val;
+          refreshSchoolMatchUI();
+          renderCanvas();
+        });
+
+        infoCol.appendChild(nameRow);
+        infoCol.appendChild(select);
+
+        const uploadLabel = document.createElement('label');
+        uploadLabel.title = `單獨上傳「${schoolName}」的校徽`;
+        uploadLabel.className = 'shrink-0 px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold text-sky-300 border border-slate-700 cursor-pointer transition';
+        uploadLabel.textContent = '上傳';
+
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        fileInput.className = 'hidden';
+        fileInput.addEventListener('change', (e) => {
+          if (e.target.files && e.target.files[0]) {
+            handleSingleSchoolLogoOverride(schoolName, e.target.files[0]);
+          }
+        });
+        uploadLabel.appendChild(fileInput);
+
+        row.appendChild(thumbWrap);
+        row.appendChild(infoCol);
+        row.appendChild(uploadLabel);
+        container.appendChild(row);
+      });
+    }
+
+    /**
+     * =========================================================================
+     * 8. 背景照片管理（支援全域套用 vs 單組覆蓋）
+     * =========================================================================
+     */
+    function setBgUploadScope(scope) {
+      state.bgUploadScope = scope;
+      const btnAll = document.getElementById('btnBgScopeAll');
+      const btnCur = document.getElementById('btnBgScopeCurrent');
+      if (scope === 'all') {
+        btnAll.className = 'py-1.5 rounded-lg text-[11px] font-semibold transition bg-sky-500/20 text-sky-300 border border-sky-500/30';
+        btnCur.className = 'py-1.5 rounded-lg text-[11px] font-semibold transition text-slate-400 hover:text-slate-200 border border-transparent';
+      } else {
+        btnCur.className = 'py-1.5 rounded-lg text-[11px] font-semibold transition bg-sky-500/20 text-sky-300 border border-sky-500/30';
+        btnAll.className = 'py-1.5 rounded-lg text-[11px] font-semibold transition text-slate-400 hover:text-slate-200 border border-transparent';
+      }
+    }
+
+    async function handleBgUpload(file) {
+      if (!file) return;
+      try {
+        const { img, objectUrl } = await loadImageFromFile(file);
+        const div = getActiveDivision();
+
+        if (state.bgUploadScope === 'current' && div) {
+          if (div.bgOverride && div.bgOverride.objectUrl) {
+            URL.revokeObjectURL(div.bgOverride.objectUrl);
+          }
+          div.bgOverride = {
+            img,
+            objectUrl,
+            fileName: file.name,
+            darkness: state.globalBg.darkness,
+            vignette: state.globalBg.vignette,
+            zoom: 100,
+            panX: 0,
+            panY: 0
+          };
+          showToast(`已僅為「${div.name}」套用背景：${file.name}`, 'success');
+        } else {
+          if (state.globalBg.objectUrl) URL.revokeObjectURL(state.globalBg.objectUrl);
+          state.globalBg.img = img;
+          state.globalBg.objectUrl = objectUrl;
+          state.globalBg.fileName = file.name;
+          state.globalBg.zoom = 100;
+          state.globalBg.panX = 0;
+          state.globalBg.panY = 0;
+          // 清除各組覆蓋，讓全部組別統一使用新背景
+          state.divisions.forEach(d => {
+            if (d.bgOverride && d.bgOverride.objectUrl) URL.revokeObjectURL(d.bgOverride.objectUrl);
+            d.bgOverride = null;
+          });
+          showToast(`已將背景照片「${file.name}」套用至全部 ${state.divisions.length} 個組別`, 'success');
+        }
+
+        syncBgControlsUI();
+        renderCanvas();
+      } catch (e) {
+        showToast('背景圖片讀取失敗，請重試。', 'error');
+      }
+    }
+
+    function clearCurrentBackground() {
+      const div = getActiveDivision();
+      if (div && div.bgOverride) {
+        if (div.bgOverride.objectUrl) URL.revokeObjectURL(div.bgOverride.objectUrl);
+        div.bgOverride = null;
+        showToast(`已移除「${div.name}」的獨立背景`, 'info');
+      } else {
+        if (state.globalBg.objectUrl) URL.revokeObjectURL(state.globalBg.objectUrl);
+        state.globalBg.img = null;
+        state.globalBg.objectUrl = null;
+        state.globalBg.fileName = '';
+        state.globalBg.zoom = 100;
+        state.globalBg.panX = 0;
+        state.globalBg.panY = 0;
+        showToast('已恢復內建球場夜賽背景', 'info');
+      }
+      syncBgControlsUI();
+      renderCanvas();
+    }
+
+    function resetBgTransform() {
+      const bg = getActiveBgConfig();
+      bg.zoom = 100;
+      bg.panX = 0;
+      bg.panY = 0;
+      syncBgControlsUI();
+      renderCanvas();
+    }
+
+    function syncBgControlsUI() {
+      const div = getActiveDivision();
+      const bg = getActiveBgConfig(div);
+      const isOverride = Boolean(div && div.bgOverride);
+
+      const thumb = document.getElementById('bgThumbPreview');
+      const label = document.getElementById('bgFileNameLabel');
+      const clearBtn = document.getElementById('btnClearBg');
+
+      if (bg.img) {
+        thumb.src = bg.objectUrl;
+        thumb.classList.remove('hidden');
+        label.textContent = `${isOverride ? '[本組獨立] ' : '[全部通用] '}${bg.fileName}`;
+        clearBtn.classList.remove('hidden');
+        canvas.classList.add('canvas-draggable');
+      } else {
+        thumb.classList.add('hidden');
+        label.textContent = '目前使用：內建深邃球場夜賽背景';
+        clearBtn.classList.add('hidden');
+        canvas.classList.remove('canvas-draggable');
+      }
+
+      document.getElementById('sliderBgDarkness').value = bg.darkness;
+      document.getElementById('valBgDarkness').textContent = `${bg.darkness}%`;
+      document.getElementById('sliderBgVignette').value = bg.vignette;
+      document.getElementById('valBgVignette').textContent = `${bg.vignette}%`;
+      document.getElementById('sliderBgZoom').value = bg.zoom;
+      document.getElementById('valBgZoom').textContent = `${bg.zoom}%`;
+      document.getElementById('sliderBgPanX').value = bg.panX;
+      document.getElementById('valBgPanX').textContent = `${bg.panX}%`;
+      document.getElementById('sliderBgPanY').value = bg.panY;
+      document.getElementById('valBgPanY').textContent = `${bg.panY}%`;
+    }
+
+    /**
+     * =========================================================================
+     * 9. 原生 HTML5 Canvas 高清海報渲染引擎（支援 2 至 8+ 線自適應排版）
+     * =========================================================================
+     */
+    function renderCanvas(targetDivision = null, targetCanvas = canvas) {
+      const div = targetDivision || getActiveDivision();
+      if (!div) return;
+
+      const tCtx = targetCanvas.getContext('2d');
+      const dim = ASPECT_RATIOS[state.aspect] || ASPECT_RATIOS['1:1'];
+      if (targetCanvas.width !== dim.width || targetCanvas.height !== dim.height) {
+        targetCanvas.width = dim.width;
+        targetCanvas.height = dim.height;
+      }
+
+      const W = targetCanvas.width;
+      const H = targetCanvas.height;
+      const bgCfg = getActiveBgConfig(div);
+
+      tCtx.save();
+      tCtx.clearRect(0, 0, W, H);
+
+      // 1. 背景層
+      drawBackgroundLayer(tCtx, W, H, bgCfg);
+
+      // 2. 壓暗與底部暗角層
+      drawOverlayVignette(tCtx, W, H, bgCfg);
+
+      // 3. 頂部標題與選配比賽地點
+      const headerBottomY = drawHeaderLayer(tCtx, W, H, div);
+
+      // 4. 底部 #體報 風格焦點標語
+      const bannerTopY = div.showBanner
+        ? drawBottomBannerLayer(tCtx, W, H, div)
+        : H - Math.round(H * 0.042);
+
+      // 5. 自適應多線分組網格（2 至 8+ 線皆零重疊、零截斷）
+      const usedCols = drawGroupsGridLayer(tCtx, W, H, headerBottomY, bannerTopY, div);
+
+      tCtx.restore();
+
+      if (targetCanvas === canvas) {
+        const previewLayoutEl = document.getElementById('previewLayoutStat');
+        if (previewLayoutEl) {
+          previewLayoutEl.textContent = `目前排版：${usedCols} 欄 · ${div.parsedGroups.length} 線`;
+        }
+      }
+    }
+
+    function drawBackgroundLayer(tCtx, W, H, bgCfg) {
+      if (bgCfg && bgCfg.img) {
+        const img = bgCfg.img;
+        const imgAspect = img.naturalWidth / img.naturalHeight;
+        const canvasAspect = W / H;
+
+        let drawW, drawH;
+        if (imgAspect > canvasAspect) {
+          drawH = H;
+          drawW = H * imgAspect;
+        } else {
+          drawW = W;
+          drawH = W / imgAspect;
+        }
+
+        const scale = (bgCfg.zoom || 100) / 100;
+        drawW *= scale;
+        drawH *= scale;
+
+        const offsetX = ((bgCfg.panX || 0) / 100) * W;
+        const offsetY = ((bgCfg.panY || 0) / 100) * H;
+        tCtx.drawImage(img, (W - drawW) / 2 + offsetX, (H - drawH) / 2 + offsetY, drawW, drawH);
+      } else {
+        // 內建深邃體育場館夜賽質感背景
+        const baseGrad = tCtx.createLinearGradient(0, 0, 0, H);
+        baseGrad.addColorStop(0, '#0e1726');
+        baseGrad.addColorStop(0.45, '#12222c');
+        baseGrad.addColorStop(0.78, '#0d261c');
+        baseGrad.addColorStop(1, '#06110c');
+        tCtx.fillStyle = baseGrad;
+        tCtx.fillRect(0, 0, W, H);
+
+        const lightL = tCtx.createRadialGradient(W * 0.16, H * 0.05, 10, W * 0.16, H * 0.05, W * 0.65);
+        lightL.addColorStop(0, 'rgba(186, 230, 253, 0.22)');
+        lightL.addColorStop(0.42, 'rgba(56, 189, 248, 0.07)');
+        lightL.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        tCtx.fillStyle = lightL;
+        tCtx.fillRect(0, 0, W, H);
+
+        const lightR = tCtx.createRadialGradient(W * 0.85, H * 0.07, 10, W * 0.85, H * 0.07, W * 0.6);
+        lightR.addColorStop(0, 'rgba(167, 243, 208, 0.18)');
+        lightR.addColorStop(0.45, 'rgba(16, 185, 129, 0.06)');
+        lightR.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        tCtx.fillStyle = lightR;
+        tCtx.fillRect(0, 0, W, H);
+
+        tCtx.save();
+        tCtx.strokeStyle = 'rgba(255, 255, 255, 0.055)';
+        tCtx.lineWidth = Math.max(2, W * 0.0024);
+        const horizonY = H * 0.45;
+        tCtx.beginPath();
+        tCtx.moveTo(0, horizonY);
+        tCtx.lineTo(W, horizonY);
+        tCtx.stroke();
+
+        tCtx.beginPath();
+        tCtx.ellipse(W * 0.5, H * 0.64, W * 0.28, H * 0.09, 0, 0, Math.PI * 2);
+        tCtx.stroke();
+
+        tCtx.beginPath();
+        tCtx.moveTo(W * 0.5, horizonY);
+        tCtx.lineTo(W * 0.5, H);
+        tCtx.stroke();
+        tCtx.restore();
+      }
+    }
+
+    function drawOverlayVignette(tCtx, W, H, bgCfg) {
+      const darkness = bgCfg ? bgCfg.darkness : 65;
+      const vignette = bgCfg ? bgCfg.vignette : 65;
+
+      const darknessAlpha = bgCfg && bgCfg.img
+        ? (darkness / 100)
+        : Math.max(0, (darkness - 25) / 100) * 0.6;
+
+      if (darknessAlpha > 0) {
+        tCtx.fillStyle = `rgba(6, 10, 18, ${darknessAlpha.toFixed(3)})`;
+        tCtx.fillRect(0, 0, W, H);
+      }
+
+      const topGrad = tCtx.createLinearGradient(0, 0, 0, H * 0.22);
+      topGrad.addColorStop(0, 'rgba(4, 8, 14, 0.68)');
+      topGrad.addColorStop(1, 'rgba(4, 8, 14, 0)');
+      tCtx.fillStyle = topGrad;
+      tCtx.fillRect(0, 0, W, H * 0.22);
+
+      const vigStrength = vignette / 100;
+      if (vigStrength > 0) {
+        const botGrad = tCtx.createLinearGradient(0, H * 0.56, 0, H);
+        botGrad.addColorStop(0, 'rgba(4, 9, 14, 0)');
+        botGrad.addColorStop(0.65, `rgba(4, 9, 14, ${(0.55 * vigStrength).toFixed(3)})`);
+        botGrad.addColorStop(1, `rgba(3, 7, 12, ${(0.92 * vigStrength).toFixed(3)})`);
+        tCtx.fillStyle = botGrad;
+        tCtx.fillRect(0, H * 0.56, W, H * 0.44);
+      }
+    }
+
+    function drawHeaderLayer(tCtx, W, H, div) {
+      const scaleFactor = W / 1080;
+      const topPadding = Math.round(H * 0.048);
+      let titleFontSize = Math.round(state.titleSize * (state.aspect === '16:9' ? 1.15 : 1));
+      const maxTitleWidth = W * 0.91;
+      const fontFamily = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
+
+      tCtx.save();
+      tCtx.textAlign = 'center';
+      tCtx.textBaseline = 'top';
+
+      while (titleFontSize > 22) {
+        tCtx.font = `900 ${titleFontSize}px ${fontFamily}`;
+        if (tCtx.measureText(div.title || '').width <= maxTitleWidth) break;
+        titleFontSize -= 2;
+      }
+
+      tCtx.shadowColor = 'rgba(0, 0, 0, 0.92)';
+      tCtx.shadowBlur = 14;
+      tCtx.shadowOffsetX = 0;
+      tCtx.shadowOffsetY = 4;
+      tCtx.fillStyle = '#ffffff';
+      tCtx.fillText(div.title || '', W / 2, topPadding);
+
+      tCtx.shadowBlur = 0;
+      tCtx.shadowOffsetY = 0;
+      tCtx.lineWidth = 1.5;
+      tCtx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+      tCtx.strokeText(div.title || '', W / 2, topPadding);
+
+      let bottomY = topPadding + titleFontSize + Math.round(16 * scaleFactor);
+
+      if (div.showVenue && (div.venue || '').trim()) {
+        const venueSize = Math.round(titleFontSize * 0.45);
+        tCtx.font = `700 ${venueSize}px ${fontFamily}`;
+        const venueText = div.venue.trim();
+        const textW = tCtx.measureText(venueText).width;
+        const pillH = venueSize + 14;
+        const pillW = Math.min(W * 0.88, textW + 34);
+        const pillX = (W - pillW) / 2;
+        const pillY = bottomY - 4;
+
+        drawRoundedRect(tCtx, pillX, pillY, pillW, pillH, pillH / 2);
+        tCtx.fillStyle = 'rgba(15, 23, 42, 0.68)';
+        tCtx.fill();
+        tCtx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+        tCtx.lineWidth = 1.5;
+        tCtx.stroke();
+
+        tCtx.fillStyle = '#e2e8f0';
+        tCtx.textBaseline = 'middle';
+        tCtx.fillText(venueText, W / 2, pillY + pillH / 2 + 1, pillW - 20);
+
+        bottomY = pillY + pillH + Math.round(16 * scaleFactor);
+      }
+
+      tCtx.restore();
+      return bottomY;
+    }
+
+    function drawBottomBannerLayer(tCtx, W, H, div) {
+      const fontFamily = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
+      const baseScale = (W / 1080) * (state.bannerScale / 100) * (state.aspect === '16:9' ? 0.72 : 1);
+      const bottomMargin = Math.round(H * 0.03);
+      const bannerHeight = Math.round(166 * baseScale);
+      const bannerTopY = H - bottomMargin - bannerHeight;
+
+      tCtx.save();
+
+      // 左下 #體報 標誌
+      const tagStr = (div.tagText || '').trim();
+      let leftReservedX = W * 0.05;
+
+      if (tagStr) {
+        const tagFontSize = Math.round(76 * baseScale);
+        const tagX = Math.round(W * 0.048);
+        const tagY = H - bottomMargin - Math.round(12 * baseScale);
+
+        tCtx.font = `italic 900 ${tagFontSize}px ${fontFamily}`;
+        tCtx.textAlign = 'left';
+        tCtx.textBaseline = 'bottom';
+        tCtx.lineJoin = 'round';
+        tCtx.miterLimit = 2;
+
+        tCtx.shadowColor = div.tagStrokeColor || '#2563eb';
+        tCtx.shadowBlur = Math.round(22 * baseScale);
+        tCtx.lineWidth = Math.round(15 * baseScale);
+        tCtx.strokeStyle = div.tagStrokeColor || '#2563eb';
+        tCtx.strokeText(tagStr, tagX, tagY);
+
+        tCtx.shadowBlur = 0;
+        tCtx.lineWidth = Math.round(6 * baseScale);
+        tCtx.strokeStyle = '#0f295c';
+        tCtx.strokeText(tagStr, tagX, tagY);
+
+        tCtx.fillStyle = '#ffffff';
+        tCtx.fillText(tagStr, tagX, tagY);
+
+        leftReservedX = tagX + tCtx.measureText(tagStr).width + Math.round(28 * baseScale);
+      }
+
+      const rightEdgeX = W - Math.round(W * 0.052);
+      const maxHeadlineW = Math.max(200, rightEdgeX - leftReservedX);
+
+      // 第一行（亮綠）
+      const l1Pre = (div.line1Prefix || '').trim();
+      const l1High = (div.line1Highlight || '').trim();
+      if (l1Pre || l1High) {
+        let preSize = Math.round(50 * baseScale);
+        let highSize = Math.round(72 * baseScale);
+
+        const measureL1 = (s1, s2) => {
+          tCtx.font = `900 ${s1}px ${fontFamily}`;
+          const w1 = l1Pre ? tCtx.measureText(l1Pre).width : 0;
+          tCtx.font = `900 ${s2}px ${fontFamily}`;
+          const w2 = l1High ? tCtx.measureText(l1High).width : 0;
+          return { w1, w2, total: w1 + w2 };
+        };
+
+        let m1 = measureL1(preSize, highSize);
+        if (m1.total > maxHeadlineW) {
+          const r = maxHeadlineW / m1.total;
+          preSize = Math.floor(preSize * r);
+          highSize = Math.floor(highSize * r);
+          m1 = measureL1(preSize, highSize);
+        }
+
+        const l1StartX = tagStr
+          ? Math.min(leftReservedX + Math.round(6 * baseScale), rightEdgeX - m1.total)
+          : (W - m1.total) / 2;
+        const l1BaselineY = bannerTopY + Math.round(80 * baseScale);
+
+        drawImpactSegment(tCtx, l1Pre, l1StartX, l1BaselineY, preSize, div.line1Color || '#84cc16', baseScale, fontFamily);
+        drawImpactSegment(tCtx, l1High, l1StartX + m1.w1, l1BaselineY, highSize, div.line1Color || '#84cc16', baseScale, fontFamily);
+      }
+
+      // 第二行（白字 + 亮黃重點，亦支援 *星號* 自動拆分）
+      let l2Pre = (div.line2Prefix || '').trim();
+      let l2High = (div.line2Highlight || '').trim();
+      if (!l2High && l2Pre.includes('*')) {
+        const starMatch = l2Pre.match(/^(.*?)\*(.+?)\*(.*)$/);
+        if (starMatch) {
+          l2Pre = starMatch[1];
+          l2High = starMatch[2] + (starMatch[3] || '');
+        }
+      }
+
+      if (l2Pre || l2High) {
+        let preSize = Math.round(44 * baseScale);
+        let highSize = Math.round(72 * baseScale);
+
+        const measureL2 = (s1, s2) => {
+          tCtx.font = `900 ${s1}px ${fontFamily}`;
+          const w1 = l2Pre ? tCtx.measureText(l2Pre).width : 0;
+          tCtx.font = `900 ${s2}px ${fontFamily}`;
+          const w2 = l2High ? tCtx.measureText(l2High).width : 0;
+          return { w1, w2, total: w1 + w2 };
+        };
+
+        let m2 = measureL2(preSize, highSize);
+        if (m2.total > maxHeadlineW) {
+          const r = maxHeadlineW / m2.total;
+          preSize = Math.floor(preSize * r);
+          highSize = Math.floor(highSize * r);
+          m2 = measureL2(preSize, highSize);
+        }
+
+        const l2StartX = tagStr ? rightEdgeX - m2.total : (W - m2.total) / 2;
+        const l2BaselineY = H - bottomMargin - Math.round(8 * baseScale);
+
+        drawImpactSegment(tCtx, l2Pre, l2StartX, l2BaselineY, preSize, '#ffffff', baseScale, fontFamily);
+        drawImpactSegment(tCtx, l2High, l2StartX + m2.w1, l2BaselineY, highSize, div.line2Color || '#facc15', baseScale, fontFamily);
+      }
+
+      tCtx.restore();
+      return bannerTopY - Math.round(12 * baseScale);
+    }
+
+    function drawImpactSegment(tCtx, text, x, baselineY, fontSize, fillColor, baseScale, fontFamily) {
+      if (!text) return;
+      tCtx.save();
+      tCtx.font = `900 ${fontSize}px ${fontFamily}`;
+      tCtx.textAlign = 'left';
+      tCtx.textBaseline = 'alphabetic';
+      tCtx.lineJoin = 'round';
+
+      tCtx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+      tCtx.shadowBlur = Math.round(14 * baseScale);
+      tCtx.shadowOffsetX = Math.round(3 * baseScale);
+      tCtx.shadowOffsetY = Math.round(5 * baseScale);
+
+      tCtx.lineWidth = Math.max(3, Math.round(6 * baseScale));
+      tCtx.strokeStyle = 'rgba(4, 8, 12, 0.9)';
+      tCtx.strokeText(text, x, baselineY);
+
+      tCtx.shadowBlur = 0;
+      tCtx.shadowOffsetX = 0;
+      tCtx.shadowOffsetY = 0;
+      tCtx.fillStyle = fillColor;
+      tCtx.fillText(text, x, baselineY);
+      tCtx.restore();
+    }
+
+    function drawGroupsGridLayer(tCtx, W, H, areaTopY, areaBottomY, div) {
+      const groups = div.parsedGroups || [];
+      if (groups.length === 0) return 0;
+
+      const fontFamily = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
+
+      // 自適應欄數（1~2組 -> 2欄居中; 3~4組 -> 2×2; 5~6組 -> 2×3 或橫版3×2; 7~8+組 -> 2×4 或橫版3欄）
+      let cols = 2;
+      if (state.columnMode === '2') {
+        cols = Math.min(2, groups.length);
+      } else if (state.columnMode === '3') {
+        cols = Math.min(3, groups.length);
+      } else {
+        if (groups.length === 1) cols = 1;
+        else if (state.aspect === '16:9' && groups.length >= 3) cols = groups.length >= 7 ? 4 : 3;
+        else cols = 2;
+      }
+
+      const rowsCount = Math.ceil(groups.length / cols);
+
+      const padX = Math.round(W * (cols >= 3 ? 0.045 : 0.072));
+      const colGap = Math.round(W * (cols >= 3 ? 0.028 : 0.042));
+      const colWidth = (W - padX * 2 - colGap * (cols - 1)) / cols;
+      const availableHeight = Math.max(180, areaBottomY - areaTopY);
+
+      const rowMaxTeams = [];
+      for (let r = 0; r < rowsCount; r++) {
+        let maxT = 1;
+        for (let c = 0; c < cols; c++) {
+          const idx = r * cols + c;
+          if (idx < groups.length) {
+            maxT = Math.max(maxT, groups[idx].teams.length);
+          }
+        }
+        rowMaxTeams.push(maxT);
+      }
+
+      const spacingMult = state.rowSpacing / 100;
+      const colScale = cols === 4 ? 0.76 : (cols === 3 ? 0.86 : 1);
+      const desiredLogoSize = state.logoSize * colScale;
+      const desiredTeamFont = state.teamSize * colScale;
+      const desiredHeaderSize = Math.round(desiredTeamFont * 1.04);
+
+      const unitRowHeight = Math.max(desiredLogoSize + 10, desiredTeamFont + 22) * spacingMult;
+      const unitHeaderBlock = desiredHeaderSize + 16;
+      const unitGroupGap = rowsCount > 1 ? 22 * spacingMult : 0;
+
+      let totalDesiredHeight = 0;
+      for (let r = 0; r < rowsCount; r++) {
+        totalDesiredHeight += unitHeaderBlock + rowMaxTeams[r] * unitRowHeight;
+        if (r < rowsCount - 1) totalDesiredHeight += unitGroupGap;
+      }
+
+      // 超出可用安全區時等比自動壓縮，保證 8 線 32 隊也絕不重疊出界
+      const fitScale = totalDesiredHeight > availableHeight
+        ? (availableHeight / totalDesiredHeight)
+        : 1;
+
+      const finalLogoSize = Math.max(24, Math.round(desiredLogoSize * fitScale));
+      const finalTeamFont = Math.max(16, Math.round(desiredTeamFont * fitScale));
+      const finalHeaderFont = Math.max(18, Math.round(desiredHeaderSize * fitScale));
+      const finalRowH = Math.round(unitRowHeight * fitScale);
+      const finalHeaderH = Math.round(unitHeaderBlock * fitScale);
+      const finalGroupGap = Math.round(unitGroupGap * fitScale);
+
+      const actualContentH = totalDesiredHeight * fitScale;
+      const extraSpace = Math.max(0, availableHeight - actualContentH);
+      const startY = areaTopY + Math.round(extraSpace * 0.28);
+      const extraRowGap = rowsCount > 1 ? Math.round((extraSpace * 0.44) / (rowsCount - 1)) : 0;
+
+      let cursorY = startY;
+
+      for (let r = 0; r < rowsCount; r++) {
+        for (let c = 0; c < cols; c++) {
+          const idx = r * cols + c;
+          if (idx >= groups.length) continue;
+
+          const group = groups[idx];
+          const colX = padX + c * (colWidth + colGap);
+
+          // 組別線名（如 A線、B線）
+          tCtx.save();
+          tCtx.font = `900 ${finalHeaderFont}px ${fontFamily}`;
+          tCtx.textAlign = 'left';
+          tCtx.textBaseline = 'top';
+          tCtx.shadowColor = 'rgba(0, 0, 0, 0.92)';
+          tCtx.shadowBlur = 10;
+          tCtx.shadowOffsetY = 3;
+          tCtx.fillStyle = '#ffffff';
+          tCtx.fillText(group.label || '', colX + 4, cursorY);
+          tCtx.restore();
+
+          let teamY = cursorY + finalHeaderH;
+          const logoGap = Math.round(finalLogoSize * 0.24);
+          const textStartX = colX + finalLogoSize + logoGap;
+          const maxTextWidth = Math.max(70, colWidth - finalLogoSize - logoGap - 4);
+
+          for (const schoolName of group.teams) {
+            const centerY = teamY + finalRowH / 2;
+            const resolved = resolveLogoForSchool(schoolName);
+
+            drawSchoolLogo(
+              tCtx,
+              resolved.item ? resolved.item.img : null,
+              schoolName,
+              colX,
+              centerY - finalLogoSize / 2,
+              finalLogoSize
+            );
+
+            tCtx.save();
+            let currentFont = finalTeamFont;
+            tCtx.font = `700 ${currentFont}px ${fontFamily}`;
+            let measuredW = tCtx.measureText(schoolName).width;
+            while (measuredW > maxTextWidth && currentFont > 13) {
+              currentFont -= 1;
+              tCtx.font = `700 ${currentFont}px ${fontFamily}`;
+              measuredW = tCtx.measureText(schoolName).width;
+            }
+
+            tCtx.textAlign = 'left';
+            tCtx.textBaseline = 'middle';
+            tCtx.shadowColor = 'rgba(0, 0, 0, 0.96)';
+            tCtx.shadowBlur = 10;
+            tCtx.shadowOffsetX = 1;
+            tCtx.shadowOffsetY = 3;
+            tCtx.fillStyle = '#ffffff';
+            tCtx.fillText(schoolName, textStartX, centerY + 1);
+
+            tCtx.shadowBlur = 0;
+            tCtx.shadowOffsetX = 0;
+            tCtx.shadowOffsetY = 0;
+            tCtx.lineWidth = 1;
+            tCtx.strokeStyle = 'rgba(0, 0, 0, 0.28)';
+            tCtx.strokeText(schoolName, textStartX, centerY + 1);
+            tCtx.restore();
+
+            teamY += finalRowH;
+          }
+        }
+        cursorY += finalHeaderH + rowMaxTeams[r] * finalRowH + finalGroupGap + extraRowGap;
+      }
+
+      return cols;
+    }
+
+    function drawSchoolLogo(tCtx, img, schoolName, x, y, size) {
+      const cx = x + size / 2;
+      const cy = y + size / 2;
+
+      tCtx.save();
+
+      if (img) {
+        if (state.logoStyle === 'badge') {
+          tCtx.shadowColor = 'rgba(0, 0, 0, 0.55)';
+          tCtx.shadowBlur = 10;
+          tCtx.shadowOffsetY = 3;
+          tCtx.beginPath();
+          tCtx.arc(cx, cy, size / 2, 0, Math.PI * 2);
+          tCtx.fillStyle = '#ffffff';
+          tCtx.fill();
+
+          tCtx.shadowBlur = 0;
+          tCtx.shadowOffsetY = 0;
+          tCtx.lineWidth = 2;
+          tCtx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+          tCtx.stroke();
+
+          tCtx.beginPath();
+          tCtx.arc(cx, cy, size / 2 - 2, 0, Math.PI * 2);
+          tCtx.clip();
+
+          const inner = size * 0.80;
+          drawImageContain(tCtx, img, cx - inner / 2, cy - inner / 2, inner, inner);
+        } else if (state.logoStyle === 'rounded') {
+          const r = size * 0.22;
+          tCtx.shadowColor = 'rgba(0, 0, 0, 0.55)';
+          tCtx.shadowBlur = 10;
+          tCtx.shadowOffsetY = 3;
+          drawRoundedRect(tCtx, x, y, size, size, r);
+          tCtx.fillStyle = 'rgba(255, 255, 255, 0.96)';
+          tCtx.fill();
+
+          tCtx.shadowBlur = 0;
+          tCtx.shadowOffsetY = 0;
+          drawRoundedRect(tCtx, x + 1, y + 1, size - 2, size - 2, r);
+          tCtx.clip();
+
+          const inner = size * 0.82;
+          drawImageContain(tCtx, img, cx - inner / 2, cy - inner / 2, inner, inner);
+        } else if (state.logoStyle === 'glow') {
+          const glow = tCtx.createRadialGradient(cx, cy, size * 0.12, cx, cy, size * 0.58);
+          glow.addColorStop(0, 'rgba(255, 255, 255, 0.44)');
+          glow.addColorStop(0.55, 'rgba(255, 255, 255, 0.18)');
+          glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          tCtx.fillStyle = glow;
+          tCtx.beginPath();
+          tCtx.arc(cx, cy, size * 0.58, 0, Math.PI * 2);
+          tCtx.fill();
+
+          tCtx.shadowColor = 'rgba(0, 0, 0, 0.65)';
+          tCtx.shadowBlur = 8;
+          tCtx.shadowOffsetY = 2;
+          drawImageContain(tCtx, img, x, y, size, size);
+        } else {
+          tCtx.shadowColor = 'rgba(0, 0, 0, 0.75)';
+          tCtx.shadowBlur = 8;
+          tCtx.shadowOffsetY = 2;
+          drawImageContain(tCtx, img, x, y, size, size);
+        }
+      } else {
+        // 精緻向量盾牌佔位圖
+        const pad = size * 0.08;
+        const sx = x + pad;
+        const sy = y + pad;
+        const sw = size - pad * 2;
+        const sh = size - pad * 2;
+
+        tCtx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+        tCtx.shadowBlur = 8;
+        tCtx.shadowOffsetY = 3;
+
+        tCtx.beginPath();
+        tCtx.moveTo(cx, sy);
+        tCtx.lineTo(sx + sw, sy + sh * 0.18);
+        tCtx.lineTo(sx + sw, sy + sh * 0.55);
+        tCtx.quadraticCurveTo(sx + sw, sy + sh * 0.88, cx, sy + sh);
+        tCtx.quadraticCurveTo(sx, sy + sh * 0.88, sx, sy + sh * 0.55);
+        tCtx.lineTo(sx, sy + sh * 0.18);
+        tCtx.closePath();
+
+        const shieldGrad = tCtx.createLinearGradient(sx, sy, sx, sy + sh);
+        shieldGrad.addColorStop(0, 'rgba(51, 65, 85, 0.88)');
+        shieldGrad.addColorStop(1, 'rgba(15, 23, 42, 0.94)');
+        tCtx.fillStyle = shieldGrad;
+        tCtx.fill();
+
+        tCtx.shadowBlur = 0;
+        tCtx.shadowOffsetY = 0;
+        tCtx.lineWidth = Math.max(1.5, size * 0.04);
+        tCtx.strokeStyle = 'rgba(226, 232, 240, 0.55)';
+        tCtx.stroke();
+
+        const firstChar = (schoolName || '?').trim().charAt(0);
+        tCtx.fillStyle = 'rgba(241, 245, 249, 0.9)';
+        tCtx.font = `700 ${Math.round(size * 0.40)}px "Noto Sans TC", sans-serif`;
+        tCtx.textAlign = 'center';
+        tCtx.textBaseline = 'middle';
+        tCtx.fillText(firstChar, cx, cy + 1);
+      }
+
+      tCtx.restore();
+    }
+
+    function drawImageContain(context, img, x, y, boxW, boxH) {
+      const iw = img.naturalWidth || img.width;
+      const ih = img.naturalHeight || img.height;
+      if (!iw || !ih) return;
+      const scale = Math.min(boxW / iw, boxH / ih);
+      const dw = iw * scale;
+      const dh = ih * scale;
+      context.drawImage(img, x + (boxW - dw) / 2, y + (boxH - dh) / 2, dw, dh);
+    }
+
+    function drawRoundedRect(context, x, y, w, h, r) {
+      const radius = Math.min(r, w / 2, h / 2);
+      context.beginPath();
+      context.moveTo(x + radius, y);
+      context.arcTo(x + w, y, x + w, y + h, radius);
+      context.arcTo(x + w, y + h, x, y + h, radius);
+      context.arcTo(x, y + h, x, y, radius);
+      context.arcTo(x, y, x + w, y, radius);
+      context.closePath();
+    }
+
+    /**
+     * =========================================================================
+     * 10. 單組匯出 PNG、複製剪貼簿 與 一鍵批次匯出全組 ZIP
+     * =========================================================================
+     */
+    function buildSafeFileBase(div) {
+      const year = (state.meta.year || '').replace(/[\/\\:*?"<>|]/g, '-');
+      const sport = (state.meta.sport || '學界賽事').replace(/[\/\\:*?"<>|]/g, '');
+      const divName = (div.name || '分組表').replace(/[\/\\:*?"<>|]/g, '');
+      return [year, sport, divName].filter(Boolean).join('_');
+    }
+
+    function canvasToPngBlob(targetCanvas) {
+      return new Promise((resolve, reject) => {
+        try {
+          targetCanvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Canvas 轉換圖片失敗'));
+          }, 'image/png', 1.0);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    }
+
+    async function downloadCurrentPosterPng() {
+      const div = getActiveDivision();
+      if (!div) return;
+      try {
+        renderCanvas(div, canvas);
+        const fileName = `${buildSafeFileBase(div)}.png`;
+        const blob = await canvasToPngBlob(canvas);
+        triggerBlobDownload(blob, fileName);
+        showToast(`已下載高清海報：${fileName}`, 'success');
+      } catch (err) {
+        console.error('匯出 PNG 錯誤:', err);
+        showToast('匯出 PNG 失敗，請確認所有圖片正常載入後重試。', 'error');
+      }
+    }
+
+    async function copyCanvasToClipboard() {
+      const div = getActiveDivision();
+      if (!div) return;
+      try {
+        renderCanvas(div, canvas);
+        if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
+          showToast('此瀏覽器不支援直接複製圖片，請使用「下載此組 PNG」。', 'warning');
+          return;
+        }
+        const blob = await canvasToPngBlob(canvas);
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        showToast(`「${div.name}」高清圖片已複製到剪貼簿！`, 'success');
+      } catch (err) {
+        console.warn('剪貼簿寫入受限:', err);
+        showToast('瀏覽器權限限制無法直接複製圖片，請點擊「下載此組 PNG」。', 'warning');
+      }
+    }
+
+    async function exportAllDivisionsZip() {
+      if (!window.JSZip) {
+        showToast('JSZip 元件尚未載入完成，請稍候重試。', 'error');
+        return;
+      }
+      if (state.divisions.length === 0) return;
+
+      const modal = document.getElementById('batchModal');
+      const statusEl = document.getElementById('batchModalStatus');
+      const barEl = document.getElementById('batchProgressBar');
+
+      modal.classList.remove('hidden');
+      barEl.style.width = '5%';
+
+      try {
+        const zip = new JSZip();
+        const offscreen = document.createElement('canvas');
+        const usedNames = new Set();
+
+        for (let i = 0; i < state.divisions.length; i++) {
+          const div = state.divisions[i];
+          statusEl.textContent = `正在渲染第 ${i + 1} / ${state.divisions.length} 組：${div.name}...`;
+          barEl.style.width = `${Math.round(((i + 0.5) / state.divisions.length) * 85)}%`;
+
+          // 讓瀏覽器更新進度條畫面
+          await new Promise(r => setTimeout(r, 30));
+
+          renderCanvas(div, offscreen);
+          const blob = await canvasToPngBlob(offscreen);
+
+          let base = buildSafeFileBase(div);
+          if (usedNames.has(base)) base = `${base}_${i + 1}`;
+          usedNames.add(base);
+
+          zip.file(`${base}.png`, blob);
+        }
+
+        statusEl.textContent = '正在壓縮打包高清 PNG 至 ZIP 檔案...';
+        barEl.style.width = '92%';
+
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const year = (state.meta.year || '').replace(/[\/\\:*?"<>|]/g, '-');
+        const sport = (state.meta.sport || '學界賽事').replace(/[\/\\:*?"<>|]/g, '');
+        const zipName = `${[year, sport].filter(Boolean).join('_')}_全部分組圖.zip`;
+
+        barEl.style.width = '100%';
+        triggerBlobDownload(zipBlob, zipName);
+        showToast(`批次匯出成功！已打包 ${state.divisions.length} 張高清圖至 ${zipName}`, 'success');
+      } catch (err) {
+        console.error('批次匯出 ZIP 錯誤:', err);
+        showToast('批次匯出 ZIP 發生錯誤，請稍後重試。', 'error');
+      } finally {
+        setTimeout(() => modal.classList.add('hidden'), 260);
+      }
+    }
+
+    function triggerBlobDownload(blob, fileName) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }
+
+    /**
+     * =========================================================================
+     * 11. 動態組別分頁與 UI 同步控制
+     * =========================================================================
+     */
+    function renderDivisionTabs() {
+      const container = document.getElementById('divisionTabsContainer');
+      container.innerHTML = '';
+
+      state.divisions.forEach((div) => {
+        const isActive = div.id === state.activeDivisionId;
+        const teamCount = div.parsedGroups.reduce((s, g) => s + g.teams.length, 0);
+
+        const btn = document.createElement('button');
+        btn.className = isActive
+          ? 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-sky-500 text-slate-950 shadow shrink-0'
+          : 'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-studio-850 text-slate-300 hover:text-white hover:bg-studio-800 border border-slate-700/80 shrink-0';
+        btn.textContent = `${div.name} (${teamCount}隊)`;
+        btn.addEventListener('click', () => selectDivision(div.id));
+        container.appendChild(btn);
+      });
+
+      const activeDiv = getActiveDivision();
+      if (activeDiv) {
+        document.getElementById('previewDivisionCaption').textContent = `目前預覽：${activeDiv.name}`;
+      }
+    }
+
+    function selectDivision(divId) {
+      if (state.activeDivisionId === divId) return;
+      state.activeDivisionId = divId;
+      const div = getActiveDivision();
+      if (div) autoTuneTypographyForDivision(div);
+      renderDivisionTabs();
+      syncAllInputsFromState();
+      refreshSchoolMatchUI();
+      renderCanvas();
+    }
+
+    function addNewDivision() {
+      const newDiv = createDivisionObject({
+        name: `新組別${state.divisions.length + 1}`,
+        year: state.meta.year,
+        sport: state.meta.sport,
+        groups: [
+          { label: 'A線', teams: ['培正中學', '濠江中學', '粵華中學'] },
+          { label: 'B線', teams: ['勞校中學', '聖保祿學校', '慈幼中學'] }
+        ]
+      });
+      state.divisions.push(newDiv);
+      state.activeDivisionId = newDiv.id;
+      renderDivisionTabs();
+      updateParseDiagnosticUI();
+      syncAllInputsFromState();
+      refreshSchoolMatchUI();
+      renderCanvas();
+      switchTab('teams');
+      showToast(`已新增「${newDiv.name}」，可於左側編輯名單`, 'info');
+    }
+
+    function deleteCurrentDivision() {
+      if (state.divisions.length <= 1) {
+        showToast('至少須保留 1 個組別。', 'warning');
+        return;
+      }
+      const idx = state.divisions.findIndex(d => d.id === state.activeDivisionId);
+      if (idx === -1) return;
+      const removed = state.divisions[idx];
+      if (removed.bgOverride && removed.bgOverride.objectUrl) {
+        URL.revokeObjectURL(removed.bgOverride.objectUrl);
+      }
+      state.divisions.splice(idx, 1);
+      state.activeDivisionId = state.divisions[Math.max(0, idx - 1)].id;
+      renderDivisionTabs();
+      updateParseDiagnosticUI();
+      syncAllInputsFromState();
+      refreshSchoolMatchUI();
+      renderCanvas();
+      showToast(`已刪除組別「${removed.name}」`, 'info');
+    }
+
+    function applyMetaToAllDivisionTitles() {
+      const year = state.meta.year || '';
+      const sport = state.meta.sport || '';
+      state.divisions.forEach(div => {
+        div.title = `${year}學界${sport}${div.name}比賽分組表`;
+      });
+      updateParseDiagnosticUI();
+      syncAllInputsFromState();
+      renderCanvas();
+      showToast(`已將學年與運動項目同步更新至全部 ${state.divisions.length} 個組別標題`, 'success');
+    }
+
+    function copyBannerToAllDivisions() {
+      const cur = getActiveDivision();
+      if (!cur) return;
+      state.divisions.forEach(div => {
+        div.showBanner = cur.showBanner;
+        div.tagText = cur.tagText;
+        div.tagStrokeColor = cur.tagStrokeColor;
+        div.line1Prefix = cur.line1Prefix;
+        div.line1Highlight = cur.line1Highlight;
+        div.line1Color = cur.line1Color;
+        div.line2Prefix = cur.line2Prefix;
+        div.line2Highlight = cur.line2Highlight;
+        div.line2Color = cur.line2Color;
+      });
+      showToast(`已將底部標語套用至全部 ${state.divisions.length} 個組別`, 'success');
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-panel').forEach(el => el.classList.add('hidden'));
+      const target = document.getElementById(`panel-${tabId}`);
+      if (target) target.classList.remove('hidden');
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        const active = btn.dataset.tab === tabId;
+        btn.classList.toggle('bg-studio-800', active);
+        btn.classList.toggle('text-sky-400', active);
+        btn.classList.toggle('border-sky-500/30', active);
+        btn.classList.toggle('text-slate-400', !active);
+        btn.classList.toggle('border-transparent', !active);
+      });
+    }
+
+    function setAspectRatio(ratioKey) {
+      if (!ASPECT_RATIOS[ratioKey]) return;
+      state.aspect = ratioKey;
+      const dim = ASPECT_RATIOS[ratioKey];
+      document.getElementById('canvasDimBadge').textContent = `${dim.width} × ${dim.height} px`;
+
+      document.querySelectorAll('.aspect-btn').forEach(btn => {
+        const active = btn.dataset.aspect === ratioKey;
+        btn.className = active
+          ? 'aspect-btn p-2 rounded-xl border text-center transition bg-sky-500/20 border-sky-400 text-sky-200'
+          : 'aspect-btn p-2 rounded-xl border text-center transition bg-studio-950 border-slate-700 text-slate-300';
+      });
+      renderCanvas();
+    }
+
+    function setColumnMode(mode) {
+      state.columnMode = mode;
+      document.querySelectorAll('.col-btn').forEach(btn => {
+        const active = btn.dataset.cols === mode;
+        btn.className = active
+          ? 'col-btn py-1.5 rounded-xl text-xs font-semibold border transition bg-sky-500/20 border-sky-400 text-sky-200'
+          : 'col-btn py-1.5 rounded-xl text-xs font-semibold border transition bg-studio-950 border-slate-700 text-slate-300';
+      });
+      renderCanvas();
+    }
+
+    function setLogoStyle(styleKey) {
+      state.logoStyle = styleKey;
+      document.querySelectorAll('.logo-style-btn').forEach(btn => {
+        const active = btn.dataset.logoStyle === styleKey;
+        btn.className = active
+          ? 'logo-style-btn px-1.5 py-2 rounded-xl text-[11px] font-semibold border transition text-center bg-sky-500/20 border-sky-400 text-sky-300'
+          : 'logo-style-btn px-1.5 py-2 rounded-xl text-[11px] font-semibold border transition text-center bg-studio-950 border-slate-700 text-slate-300';
+      });
+      renderCanvas();
+    }
+
+    function resetTypographySettings() {
+      state.titleSize = 46;
+      state.rowSpacing = 100;
+      state.bannerScale = 100;
+      state.columnMode = 'auto';
+      autoTuneTypographyForDivision(getActiveDivision());
+      setColumnMode('auto');
+      syncAllInputsFromState();
+      renderCanvas();
+      showToast('已重設預設排版數值', 'info');
+    }
+
+    function toggleGeminiAccordion() {
+      const body = document.getElementById('geminiAccordionBody');
+      const chev = document.getElementById('geminiChevron');
+      body.classList.toggle('hidden');
+      chev.classList.toggle('rotate-180');
+    }
+
+    function toggleGeminiKeyVisibility() {
+      const inp = document.getElementById('inputGeminiKey');
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+    }
+
+    function toggleManifestHelper() {
+      document.getElementById('manifestHelperBox').classList.toggle('hidden');
+    }
+
+    function copyPowerShellManifestCmd() {
+      const text = document.getElementById('psManifestCmd').textContent;
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        showToast('已複製 PowerShell 指令！在 校徽補 資料夾打開終端機貼上執行即可生成 manifest.json', 'success');
+      } catch (e) {
+        showToast('複製失敗，請手動選取指令複製。', 'warning');
+      }
+      document.body.removeChild(ta);
+    }
+
+    function syncAllInputsFromState() {
+      const div = getActiveDivision();
+      document.getElementById('inputGlobalYear').value = state.meta.year || '';
+      document.getElementById('inputGlobalSport').value = state.meta.sport || '';
+
+      if (div) {
+        document.getElementById('inputDivName').value = div.name || '';
+        document.getElementById('inputTitle').value = div.title || '';
+        document.getElementById('inputVenue').value = div.venue || '';
+        document.getElementById('toggleVenue').checked = Boolean(div.showVenue);
+        document.getElementById('inputGroupsText').value = div.groupsText || '';
+
+        const teamTotal = div.parsedGroups.reduce((s, g) => s + g.teams.length, 0);
+        document.getElementById('teamCountStat').textContent = `${div.parsedGroups.length} 線・${teamTotal} 隊`;
+
+        document.getElementById('toggleBanner').checked = Boolean(div.showBanner);
+        document.getElementById('bannerControlsBox').classList.toggle('opacity-40', !div.showBanner);
+        document.getElementById('bannerControlsBox').classList.toggle('pointer-events-none', !div.showBanner);
+
+        document.getElementById('inputTagText').value = div.tagText || '';
+        document.getElementById('colorTagStroke').value = div.tagStrokeColor || '#2563eb';
+        document.getElementById('inputLine1Prefix').value = div.line1Prefix || '';
+        document.getElementById('inputLine1Highlight').value = div.line1Highlight || '';
+        document.getElementById('colorLine1').value = div.line1Color || '#84cc16';
+        document.getElementById('inputLine2Prefix').value = div.line2Prefix || '';
+        document.getElementById('inputLine2Highlight').value = div.line2Highlight || '';
+        document.getElementById('colorLine2').value = div.line2Color || '#facc15';
+      }
+
+      document.getElementById('sliderTitleSize').value = state.titleSize;
+      document.getElementById('valTitleSize').textContent = `${state.titleSize}px`;
+      document.getElementById('sliderTeamSize').value = state.teamSize;
+      document.getElementById('valTeamSize').textContent = `${state.teamSize}px`;
+      document.getElementById('sliderLogoSize').value = state.logoSize;
+      document.getElementById('valLogoSize').textContent = `${state.logoSize}px`;
+      document.getElementById('sliderRowSpacing').value = state.rowSpacing;
+      document.getElementById('valRowSpacing').textContent = `${(state.rowSpacing / 100).toFixed(2)}x`;
+      document.getElementById('sliderBannerScale').value = state.bannerScale;
+      document.getElementById('valBannerScale').textContent = `${state.bannerScale}%`;
+
+      syncBgControlsUI();
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const colors = {
+        success: 'bg-emerald-950/95 border-emerald-500/50 text-emerald-200',
+        warning: 'bg-amber-950/95 border-amber-500/50 text-amber-200',
+        error: 'bg-rose-950/95 border-rose-500/50 text-rose-200',
+        info: 'bg-slate-900/95 border-sky-500/40 text-slate-100'
+      };
+      toast.className = `pointer-events-auto max-w-sm px-4 py-3 rounded-xl border shadow-2xl text-xs font-medium leading-relaxed backdrop-blur-md transition-all duration-300 translate-y-2 opacity-0 ${colors[type] || colors.info}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      requestAnimationFrame(() => toast.classList.remove('translate-y-2', 'opacity-0'));
+      setTimeout(() => {
+        toast.classList.add('translate-y-2', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+      }, 3600);
+    }
+
+    /**
+     * =========================================================================
+     * 12. 事件綁定與系統啟動初始化
+     * =========================================================================
+     */
+    function bindEvents() {
+      // --- 分頁 1：PDF 上傳與拖曳 ---
+      document.getElementById('inputPdfFile').addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          handlePdfUpload(e.target.files[0]);
+          e.target.value = '';
+        }
+      });
+
+      const pdfDrop = document.getElementById('pdfDropzone');
+      ['dragenter', 'dragover'].forEach(evt => {
+        pdfDrop.addEventListener(evt, (e) => {
+          e.preventDefault();
+          pdfDrop.classList.add('border-sky-300', 'bg-sky-500/10');
+        });
+      });
+      ['dragleave', 'drop'].forEach(evt => {
+        pdfDrop.addEventListener(evt, (e) => {
+          e.preventDefault();
+          pdfDrop.classList.remove('border-sky-300', 'bg-sky-500/10');
+        });
+      });
+      pdfDrop.addEventListener('drop', (e) => {
+        if (e.dataTransfer && e.dataTransfer.files[0]) {
+          handlePdfUpload(e.dataTransfer.files[0]);
+        }
+      });
+
+      document.getElementById('inputGlobalYear').addEventListener('input', (e) => {
+        state.meta.year = e.target.value;
+        updateParseDiagnosticUI();
+      });
+      document.getElementById('inputGlobalSport').addEventListener('input', (e) => {
+        state.meta.sport = e.target.value;
+        updateParseDiagnosticUI();
+      });
+
+      // Gemini API 設定持久化
+      document.getElementById('toggleGeminiMode').addEventListener('change', (e) => {
+        state.geminiEnabled = e.target.checked;
+        try { localStorage.setItem('macau_poster_gemini_enabled', state.geminiEnabled ? '1' : '0'); } catch (_) {}
+      });
+      document.getElementById('inputGeminiKey').addEventListener('input', (e) => {
+        state.geminiApiKey = e.target.value.trim();
+        try { localStorage.setItem('macau_poster_gemini_key', state.geminiApiKey); } catch (_) {}
+      });
+
+      // --- 分頁 2：組別與名單 ---
+      document.getElementById('inputDivName').addEventListener('input', (e) => {
+        const div = getActiveDivision();
+        if (!div) return;
+        div.name = e.target.value;
+        renderDivisionTabs();
+        updateParseDiagnosticUI();
+      });
+      document.getElementById('inputTitle').addEventListener('input', (e) => {
+        const div = getActiveDivision();
+        if (!div) return;
+        div.title = e.target.value;
+        renderCanvas();
+      });
+      document.getElementById('inputVenue').addEventListener('input', (e) => {
+        const div = getActiveDivision();
+        if (!div) return;
+        div.venue = e.target.value;
+        renderCanvas();
+      });
+      document.getElementById('toggleVenue').addEventListener('change', (e) => {
+        const div = getActiveDivision();
+        if (!div) return;
+        div.showVenue = e.target.checked;
+        renderCanvas();
+      });
+      document.getElementById('inputGroupsText').addEventListener('input', (e) => {
+        const div = getActiveDivision();
+        if (!div) return;
+        div.groupsText = e.target.value;
+        div.parsedGroups = parseGroupsText(div.groupsText);
+        const totalTeams = div.parsedGroups.reduce((s, g) => s + g.teams.length, 0);
+        document.getElementById('teamCountStat').textContent = `${div.parsedGroups.length} 線・${totalTeams} 隊`;
+        renderDivisionTabs();
+        updateParseDiagnosticUI();
+        refreshSchoolMatchUI();
+        renderCanvas();
+      });
+
+      // --- 分頁 3：校徽圖庫 ---
+      document.getElementById('inputLogoFolder').addEventListener('change', (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+          handleLogoFilesUpload(e.target.files);
+          e.target.value = '';
+        }
+      });
+      document.getElementById('inputLogoFiles').addEventListener('change', (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+          handleLogoFilesUpload(e.target.files);
+          e.target.value = '';
+        }
+      });
+
+      const logoDrop = document.getElementById('logoDropzone');
+      ['dragenter', 'dragover'].forEach(evt => {
+        logoDrop.addEventListener(evt, (e) => {
+          e.preventDefault();
+          logoDrop.classList.add('border-sky-300', 'bg-sky-500/10');
+        });
+      });
+      ['dragleave', 'drop'].forEach(evt => {
+        logoDrop.addEventListener(evt, (e) => {
+          e.preventDefault();
+          logoDrop.classList.remove('border-sky-300', 'bg-sky-500/10');
+        });
+      });
+      logoDrop.addEventListener('drop', (e) => {
+        if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+          handleLogoFilesUpload(e.dataTransfer.files);
+        }
+      });
+
+      // --- 分頁 4：背景與樣式 ---
+      document.getElementById('inputBgFile').addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          handleBgUpload(e.target.files[0]);
+          e.target.value = '';
+        }
+      });
+
+      const bgDrop = document.getElementById('bgDropzone');
+      ['dragenter', 'dragover'].forEach(evt => {
+        bgDrop.addEventListener(evt, (e) => {
+          e.preventDefault();
+          bgDrop.classList.add('border-sky-400', 'bg-sky-500/10');
+        });
+      });
+      ['dragleave', 'drop'].forEach(evt => {
+        bgDrop.addEventListener(evt, (e) => {
+          e.preventDefault();
+          bgDrop.classList.remove('border-sky-400', 'bg-sky-500/10');
+        });
+      });
+      bgDrop.addEventListener('drop', (e) => {
+        if (e.dataTransfer && e.dataTransfer.files[0]) {
+          handleBgUpload(e.dataTransfer.files[0]);
+        }
+      });
+
+      bindBgSlider('sliderBgDarkness', 'valBgDarkness', 'darkness', v => `${v}%`);
+      bindBgSlider('sliderBgVignette', 'valBgVignette', 'vignette', v => `${v}%`);
+      bindBgSlider('sliderBgZoom', 'valBgZoom', 'zoom', v => `${v}%`);
+      bindBgSlider('sliderBgPanX', 'valBgPanX', 'panX', v => `${v}%`);
+      bindBgSlider('sliderBgPanY', 'valBgPanY', 'panY', v => `${v}%`);
+
+      document.getElementById('toggleBanner').addEventListener('change', (e) => {
+        const div = getActiveDivision();
+        if (!div) return;
+        div.showBanner = e.target.checked;
+        document.getElementById('bannerControlsBox').classList.toggle('opacity-40', !div.showBanner);
+        document.getElementById('bannerControlsBox').classList.toggle('pointer-events-none', !div.showBanner);
+        renderCanvas();
+      });
+
+      const bindDivField = (id, key) => {
+        document.getElementById(id).addEventListener('input', (e) => {
+          const div = getActiveDivision();
+          if (!div) return;
+          div[key] = e.target.value;
+          renderCanvas();
+        });
+      };
+      bindDivField('inputTagText', 'tagText');
+      bindDivField('colorTagStroke', 'tagStrokeColor');
+      bindDivField('inputLine1Prefix', 'line1Prefix');
+      bindDivField('inputLine1Highlight', 'line1Highlight');
+      bindDivField('colorLine1', 'line1Color');
+      bindDivField('inputLine2Prefix', 'line2Prefix');
+      bindDivField('inputLine2Highlight', 'line2Highlight');
+      bindDivField('colorLine2', 'line2Color');
+
+      bindGlobalSlider('sliderTitleSize', 'valTitleSize', (v) => { state.titleSize = v; }, v => `${v}px`);
+      bindGlobalSlider('sliderTeamSize', 'valTeamSize', (v) => { state.teamSize = v; }, v => `${v}px`);
+      bindGlobalSlider('sliderLogoSize', 'valLogoSize', (v) => { state.logoSize = v; }, v => `${v}px`);
+      bindGlobalSlider('sliderRowSpacing', 'valRowSpacing', (v) => { state.rowSpacing = v; }, v => `${(v / 100).toFixed(2)}x`);
+      bindGlobalSlider('sliderBannerScale', 'valBannerScale', (v) => { state.bannerScale = v; }, v => `${v}%`);
+
+      // 畫布滑鼠/觸控拖曳平移背景照片
+      const startDrag = (cx, cy) => {
+        const bg = getActiveBgConfig();
+        if (!bg || !bg.img) return;
+        dragState.isDragging = true;
+        dragState.startX = cx;
+        dragState.startY = cy;
+        dragState.initPanX = bg.panX || 0;
+        dragState.initPanY = bg.panY || 0;
+      };
+      const moveDrag = (cx, cy) => {
+        if (!dragState.isDragging) return;
+        const bg = getActiveBgConfig();
+        if (!bg || !bg.img) return;
+        const rect = canvas.getBoundingClientRect();
+        const dxPct = ((cx - dragState.startX) / rect.width) * 100;
+        const dyPct = ((cy - dragState.startY) / rect.height) * 100;
+        bg.panX = Math.max(-50, Math.min(50, Math.round(dragState.initPanX + dxPct)));
+        bg.panY = Math.max(-50, Math.min(50, Math.round(dragState.initPanY + dyPct)));
+        syncBgControlsUI();
+        renderCanvas();
+      };
+      const endDrag = () => { dragState.isDragging = false; };
+
+      canvas.addEventListener('mousedown', (e) => startDrag(e.clientX, e.clientY));
+      window.addEventListener('mousemove', (e) => moveDrag(e.clientX, e.clientY));
+      window.addEventListener('mouseup', endDrag);
+
+      canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) startDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: true });
+      canvas.addEventListener('touchmove', (e) => {
+        if (dragState.isDragging && e.touches.length === 1) {
+          e.preventDefault();
+          moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      }, { passive: false });
+      window.addEventListener('touchend', endDrag);
+    }
+
+    function bindBgSlider(inputId, valueId, prop, formatter) {
+      const el = document.getElementById(inputId);
+      const valEl = document.getElementById(valueId);
+      el.addEventListener('input', (e) => {
+        const num = Number(e.target.value);
+        const bg = getActiveBgConfig();
+        bg[prop] = num;
+        valEl.textContent = formatter(num);
+        renderCanvas();
+      });
+    }
+
+    function bindGlobalSlider(inputId, valueId, setter, formatter) {
+      const el = document.getElementById(inputId);
+      const valEl = document.getElementById(valueId);
+      el.addEventListener('input', (e) => {
+        const num = Number(e.target.value);
+        setter(num);
+        valEl.textContent = formatter(num);
+        renderCanvas();
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      // 還原本地儲存的 Gemini 設定
+      try {
+        const savedKey = localStorage.getItem('macau_poster_gemini_key') || '';
+        const savedEnabled = localStorage.getItem('macau_poster_gemini_enabled') === '1';
+        state.geminiApiKey = savedKey;
+        state.geminiEnabled = savedEnabled;
+        document.getElementById('inputGeminiKey').value = savedKey;
+        document.getElementById('toggleGeminiMode').checked = savedEnabled;
+      } catch (_) {}
+
+      bindEvents();
+      applyParsedProject(buildSampleFootballProject());
+      tryAutoLoadRepoLogos();
+
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(() => renderCanvas());
+      }
+    });
+  </script>
+</body>
+</html>
